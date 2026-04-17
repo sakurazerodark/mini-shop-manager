@@ -382,7 +382,7 @@ exports.getProductStockLogs = (req, res) => {
 };
 
 exports.deleteProduct = (req, res) => {
-  const sql = "UPDATE products SET deleted_at = CURRENT_TIMESTAMP, barcode = barcode || '_deleted_' || id WHERE id = ?";
+  const sql = "UPDATE products SET deleted_at = datetime('now', 'localtime'), barcode = barcode || '_deleted_' || id WHERE id = ?";
   db.run(sql, [req.params.id], function(err) {
     if (err) {
       return res.status(500).json({ error: err.message });

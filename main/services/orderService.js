@@ -61,7 +61,7 @@ const completePendingOrder = async (orderId) => {
 
     const fallbackVia = String(order.pay_method || '').trim() === 'cash' ? 'cash' : 'manual';
     await dbRun(
-      "UPDATE orders SET status = 'completed', pay_status = 'paid', pay_confirmed_via = COALESCE(pay_confirmed_via, ?), pay_paid_at = COALESCE(pay_paid_at, CURRENT_TIMESTAMP) WHERE id = ?",
+      "UPDATE orders SET status = 'completed', pay_status = 'paid', pay_confirmed_via = COALESCE(pay_confirmed_via, ?), pay_paid_at = COALESCE(pay_paid_at, datetime('now', 'localtime')) WHERE id = ?",
       [fallbackVia, orderId]
     );
     await dbRun("COMMIT");
@@ -76,7 +76,7 @@ const markOrderPaid = async ({ orderId, provider, tradeNo, confirmedVia }) => {
   const prov = String(provider || '').trim() || null;
   const tn = String(tradeNo || '').trim() || null;
   await dbRun(
-    "UPDATE orders SET pay_provider = COALESCE(pay_provider, ?), pay_trade_no = COALESCE(pay_trade_no, ?), pay_status = 'paid', pay_confirmed_via = COALESCE(pay_confirmed_via, ?), pay_paid_at = COALESCE(pay_paid_at, CURRENT_TIMESTAMP) WHERE id = ?",
+    "UPDATE orders SET pay_provider = COALESCE(pay_provider, ?), pay_trade_no = COALESCE(pay_trade_no, ?), pay_status = 'paid', pay_confirmed_via = COALESCE(pay_confirmed_via, ?), pay_paid_at = COALESCE(pay_paid_at, datetime('now', 'localtime')) WHERE id = ?",
     [prov, tn, via, String(orderId)]
   ).catch(() => {});
 };
@@ -118,7 +118,7 @@ const updateOrderPayMeta = async ({
       pay_provider_msg = COALESCE(?, pay_provider_msg),
       pay_provider_sub_msg = COALESCE(?, pay_provider_sub_msg),
       pay_last_sync_via = COALESCE(?, pay_last_sync_via),
-      pay_last_sync_at = CURRENT_TIMESTAMP,
+      pay_last_sync_at = datetime('now', 'localtime'),
       pay_status = CASE WHEN pay_status = 'paid' THEN pay_status ELSE COALESCE(?, pay_status) END
     WHERE id = ?
     `,

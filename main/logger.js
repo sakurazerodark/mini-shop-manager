@@ -10,9 +10,16 @@ if (!fs.existsSync(logsDir)) {
 }
 
 // Console Format: readable, colorized
+const timeFormat = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const pad3 = (n) => String(n).padStart(3, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
+};
+
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+  winston.format.timestamp({ format: timeFormat }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     // Extract metadata excluding winston internal symbols
     const metaObj = Object.keys(meta).reduce((acc, key) => {
@@ -26,7 +33,7 @@ const consoleFormat = winston.format.combine(
 
 // File Format: logback style plain text
 const fileFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+  winston.format.timestamp({ format: timeFormat }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     const metaObj = Object.keys(meta).reduce((acc, key) => {
       if (typeof key === 'string') acc[key] = meta[key];
