@@ -1,0 +1,15 @@
+import request from './request'
+
+export const getBasicSettings = () => request.get('/settings/basic')
+export const updateBasicSettings = (data) => request.put('/settings/basic', data)
+export const getBarcodeLookup = () => request.get('/settings/barcode_lookup')
+export const updateBarcodeLookup = (data) => request.put('/settings/barcode_lookup', data)
+export const getCostingMode = () => request.get('/settings/costing_mode')
+export const updateCostingMode = (data) => request.put('/settings/costing_mode', data)
+export const getPayments = () => request.get('/settings/payments')
+export const updatePayments = (data) => request.put('/settings/payments', data)
+export const getDataDir = () => request.get('/settings/data_dir')
+export const selectDataDir = () => request.post('/settings/data_dir/select')
+export const migrateDataDir = (data) => request.post('/settings/data_dir/migrate', data)
+export const getNetworkConfig = () => request.get('/settings/network')
+export const updateNetworkConfig = (data) => request.put('/settings/network', data)

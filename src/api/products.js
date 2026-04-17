@@ -1,0 +1,16 @@
+import request from './request'
+
+export const getProducts = () => request.get('/products')
+export const getDeletedProducts = () => request.get('/products/deleted')
+export const getProductByBarcode = (code) => request.get(`/products/barcode/${code}`)
+export const lookupBarcode = (code) => request.get(`/barcode/lookup/${encodeURIComponent(code)}`)
+export const createProduct = (data) => request.post('/products', data)
+export const updateProduct = (id, data) => request.put(`/products/${id}`, data)
+export const deleteProduct = (id) => request.delete(`/products/${id}`)
+export const restoreProduct = (id) => request.post(`/products/${id}/restore`)
+export const productLoss = (id, data) => request.post(`/products/${id}/loss`, data)
+export const productRestock = (id, data) => request.post(`/products/${id}/restock`, data)
+export const productAdjust = (id, data) => request.post(`/products/${id}/adjust`, data)
+export const getProductLogs = (id) => request.get(`/products/${id}/logs`)
+export const updateProductPrices = (id, data) => request.put(`/products/${id}/prices`, data)
+export const getProductPriceLogs = (id) => request.get(`/products/${id}/price-logs`)
