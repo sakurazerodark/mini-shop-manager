@@ -182,7 +182,14 @@ exports.updatePayments = async (req, res) => {
         if (typeof src[k] === 'string') next.alipay_f2f[k] = src[k].trim();
       };
       setStr('app_id');
-      setStr('gateway');
+      if (typeof src.gateway === 'string') {
+        const v = src.gateway.trim();
+        try {
+          next.alipay_f2f.gateway = v ? paymentService.normalizeAlipayGateway(v) : '';
+        } catch (e) {
+          return res.status(400).json({ error: e.message });
+        }
+      }
       if (typeof src.notify_url === 'string') {
         const v = src.notify_url.trim();
         try {

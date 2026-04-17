@@ -2,7 +2,7 @@ const logger = require('../logger');
 const paymentService = require('../services/paymentService');
 const orderService = require('../services/orderService');
 const settingService = require('../services/settingService');
-const { db } = require('../database');
+const { db, dbGet, dbRun } = require('../database');
 
 const tail = (v, n = 8) => {
   const s = String(v || '');
@@ -27,12 +27,18 @@ exports.alipayPrecreate = async (req, res) => {
   try {
     const cfg = await paymentService.getAlipayConfig();
     if (!cfg.appId || !cfg.gateway || !cfg.merchantPrivateKey) return res.status(400).json({ error: '支付宝配置不完整' });
+    const orderId = String(order_id || '').trim();
+    if (!orderId) return res.status(400).json({ error: '缺少 order_id' });
+    const order = await dbGet("SELECT id, total_amount, status, pay_status FROM orders WHERE id = ?", [orderId]);
+    if (!order) return res.status(404).json({ error: '订单不存在' });
+    if (order.status !== 'pending' && order.status !== 'abnormal') return res.status(400).json({ error: '订单状态不允许发起支付' });
+    if (String(order.pay_status || '').trim() === 'paid') return res.status(400).json({ error: '订单已支付' });
     logger.info('alipay precreate request', { request_id: req.requestId, order_id: String(order_id), notify_enabled: Boolean(cfg.notifyUrl), notify_url: cfg.notifyUrl || '' });
     const storeName = await settingService.getSetting('store_name', '店小易');
     const bizContent = {
-      out_trade_no: String(order_id),
-      total_amount: paymentService.toMoneyString(total_amount),
-      subject: String(subject || `${storeName} - 订单 ${order_id}`)
+      out_trade_no: orderId,
+      total_amount: paymentService.toMoneyString(order.total_amount),
+      subject: String(subject || `${storeName} - 订单 ${orderId}`)
     };
     const json = await paymentService.alipayRequest({ method: 'alipay.trade.precreate', bizContent, config: cfg, requestId: req.requestId, purpose: 'api' });
     const resp = json.alipay_trade_precreate_response || {};
@@ -58,8 +64,8 @@ exports.alipayPrecreate = async (req, res) => {
       payStatus: String(resp.code) === '10000' ? 'created' : 'failed'
     });
     if (String(resp.code) !== '10000') return res.status(400).json({ error: resp.sub_msg || resp.msg || '预下单失败', raw: resp });
-    await new Promise((resolve) => db.run("UPDATE orders SET pay_provider = 'alipay', pay_out_trade_no = ?, pay_status = 'created' WHERE id = ?", [String(order_id), String(order_id)], resolve));
-    res.json({ data: { qr_code: resp.qr_code, out_trade_no: String(order_id) } });
+    await dbRun("UPDATE orders SET pay_provider = 'alipay', pay_out_trade_no = ?, pay_status = 'created' WHERE id = ?", [orderId, orderId]).catch(() => {});
+    res.json({ data: { qr_code: resp.qr_code, out_trade_no: orderId } });
   } catch (e) {
     logger.error('alipay precreate error', { request_id: req.requestId, message: e?.message || String(e) });
     res.status(500).json({ error: e.message });
@@ -72,18 +78,24 @@ exports.alipayPay = async (req, res) => {
     const cfg = await paymentService.getAlipayConfig();
     if (!cfg.appId || !cfg.gateway || !cfg.merchantPrivateKey) return res.status(400).json({ error: '支付宝配置不完整' });
     if (!auth_code) return res.status(400).json({ error: '缺少 auth_code' });
+    const orderId = String(order_id || '').trim();
+    if (!orderId) return res.status(400).json({ error: '缺少 order_id' });
+    const order = await dbGet("SELECT id, total_amount, status, pay_status FROM orders WHERE id = ?", [orderId]);
+    if (!order) return res.status(404).json({ error: '订单不存在' });
+    if (order.status !== 'pending' && order.status !== 'abnormal') return res.status(400).json({ error: '订单状态不允许发起支付' });
+    if (String(order.pay_status || '').trim() === 'paid') return res.status(400).json({ error: '订单已支付' });
     const storeName = await settingService.getSetting('store_name', '店小易');
     const bizContent = {
-      out_trade_no: String(order_id),
-      total_amount: paymentService.toMoneyString(total_amount),
-      subject: String(subject || `${storeName} - 订单 ${order_id}`),
+      out_trade_no: orderId,
+      total_amount: paymentService.toMoneyString(order.total_amount),
+      subject: String(subject || `${storeName} - 订单 ${orderId}`),
       auth_code: String(auth_code)
     };
     const json = await paymentService.alipayRequest({ method: 'alipay.trade.pay', bizContent, config: cfg, requestId: req.requestId, purpose: 'api' });
     const resp = json.alipay_trade_pay_response || {};
     logger.info('alipay pay response', {
       request_id: req.requestId,
-      out_trade_no: String(order_id),
+      out_trade_no: orderId,
       code: String(resp.code || ''),
       msg: resp.msg || '',
       sub_msg: resp.sub_msg || '',
@@ -94,9 +106,9 @@ exports.alipayPay = async (req, res) => {
     const tradeStatus = String(resp.trade_status || '').toUpperCase();
     const internal = String(resp.code) === '10003' ? 'paying' : String(resp.code) === '10000' ? paymentService.mapAlipayTradeStatus(tradeStatus) : 'failed';
     await orderService.updateOrderPayMeta({
-      orderId: order_id,
+      orderId,
       provider: 'alipay',
-      outTradeNo: order_id,
+      outTradeNo: orderId,
       tradeNo: resp.trade_no || '',
       traceId: resp.trace_id || '',
       providerStatus: tradeStatus || '',
@@ -112,9 +124,9 @@ exports.alipayPay = async (req, res) => {
     const status = String(resp.trade_status || '').toUpperCase();
     const paid = status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED';
     if (paid) {
-      await orderService.markOrderPaid({ orderId: order_id, provider: 'alipay', tradeNo: resp.trade_no || '', confirmedVia: 'polling' });
+      await orderService.markOrderPaid({ orderId, provider: 'alipay', tradeNo: resp.trade_no || '', confirmedVia: 'polling' });
     } else {
-      await new Promise((resolve) => db.run("UPDATE orders SET pay_provider = 'alipay', pay_status = 'paying' WHERE id = ?", [String(order_id)], resolve));
+      await dbRun("UPDATE orders SET pay_provider = 'alipay', pay_status = 'paying' WHERE id = ?", [orderId]).catch(() => {});
     }
     res.json({ data: { trade_status: status || 'UNKNOWN', paid } });
   } catch (e) {
@@ -180,9 +192,22 @@ exports.alipayNotify = async (req, res) => {
       return res.status(400).send('fail');
     }
 
+    const notifiedAppId = String(form.app_id || '').trim();
+    if (notifiedAppId && cfg.appId && notifiedAppId !== cfg.appId) {
+      logger.warn('alipay notify app_id mismatch', { request_id: req.requestId, out_trade_no: String(form.out_trade_no || '').trim(), app_id: notifiedAppId });
+      return res.status(400).send('fail');
+    }
+
     const outTradeNo = String(form.out_trade_no || '').trim();
     const tradeNo = String(form.trade_no || '').trim();
     const tradeStatus = String(form.trade_status || '').trim().toUpperCase();
+    if (!outTradeNo) return res.status(400).send('fail');
+    const order = await dbGet("SELECT id, total_amount, status, pay_status FROM orders WHERE id = ?", [outTradeNo]).catch(() => null);
+    if (!order) {
+      logger.warn('alipay notify unknown order', { request_id: req.requestId, out_trade_no: outTradeNo, trade_no_tail: tail(tradeNo), trade_status: tradeStatus });
+      return res.send('success');
+    }
+
     const paid = tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED';
     await orderService.updateOrderPayMeta({
       orderId: outTradeNo,
@@ -193,9 +218,24 @@ exports.alipayNotify = async (req, res) => {
       syncVia: 'callback_alipay',
       payStatus: paymentService.mapAlipayTradeStatus(tradeStatus)
     });
-    if (outTradeNo && paid) {
-      await orderService.markOrderPaid({ orderId: outTradeNo, provider: 'alipay', tradeNo, confirmedVia: 'callback' });
-      await orderService.completePendingOrder(outTradeNo).catch(() => {});
+    if (paid) {
+      const expected = paymentService.toMoneyString(order.total_amount);
+      const got = form.total_amount !== undefined && form.total_amount !== null ? paymentService.toMoneyString(form.total_amount) : '';
+      if (got && expected !== got) {
+        logger.warn('alipay notify amount mismatch', { request_id: req.requestId, out_trade_no: outTradeNo, expected_total_amount: expected, total_amount: got, trade_no_tail: tail(tradeNo) });
+        return res.send('success');
+      }
+      const confirmed = await paymentService
+        .reconcileAlipayOrder(outTradeNo, { requestId: req.requestId, purpose: 'notify_confirm' })
+        .catch((e) => ({ ok: false, error: e?.message || String(e) }));
+      if (!confirmed.ok) {
+        if (String(confirmed.error || '').includes('金额校验失败')) {
+          logger.warn('alipay notify confirm amount mismatch', { request_id: req.requestId, out_trade_no: outTradeNo, trade_no_tail: tail(tradeNo), error: confirmed.error });
+          return res.send('success');
+        }
+        logger.error('alipay notify confirm failed', { request_id: req.requestId, out_trade_no: outTradeNo, trade_no_tail: tail(tradeNo), error: confirmed.error || 'confirm failed' });
+        return res.status(500).send('fail');
+      }
       logger.info('alipay notify paid', { request_id: req.requestId, out_trade_no: outTradeNo, trade_no: tradeNo, trade_status: tradeStatus });
     } else {
       logger.info('alipay notify received', { request_id: req.requestId, out_trade_no: outTradeNo, trade_no_tail: tail(tradeNo), trade_status: tradeStatus });

@@ -101,7 +101,7 @@ const alipaySign = (params, privateKeyPem) => {
 
 const alipayVerifySign = (form, alipayPublicKeyInput) => {
   const params = { ...(form || {}) };
-  const signature = String(params.sign || '').trim();
+  const signature = String(params.sign || '').trim().replace(/\s+/g, '+');
   delete params.sign;
   delete params.sign_type;
   const entries = Object.entries(params)
@@ -144,7 +144,7 @@ const wechatpayDecryptResource = (resource, apiV3Key) => {
 
 const unionpayVerifySignature = (form, verifyCertInput) => {
   const params = { ...(form || {}) };
-  const signature = String(params.signature || '').trim();
+  const signature = String(params.signature || '').trim().replace(/\s+/g, '+');
   delete params.signature;
   const entries = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== null && String(v).length > 0)

@@ -1,12 +1,39 @@
 const logger = require('../logger');
 const { fetchJsonWithTimeout } = require('../utils/http');
 const { pickPaymentConfig } = require('./settingService');
+const { dbGet } = require('../database');
 const {
   alipayEncryptBizContent,
   alipayDecryptBizContent,
   alipaySign
 } = require('../utils/crypto');
 const { updateOrderPayMeta, markOrderPaid, completePendingOrder } = require('./orderService');
+
+const ALIPAY_GATEWAY_ALLOWLIST = new Set([
+  'https://openapi.alipay.com/gateway.do',
+  'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
+]);
+
+const normalizeAlipayGateway = (input) => {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let u = null;
+  try {
+    u = new URL(withScheme);
+  } catch (_) {
+    throw new Error('支付宝网关地址格式不正确');
+  }
+  const pathName = u.pathname || '';
+  if (!pathName.endsWith('/gateway.do')) {
+    throw new Error('支付宝网关地址必须以 /gateway.do 结尾');
+  }
+  const normalized = `${u.origin}${pathName}`;
+  if (!ALIPAY_GATEWAY_ALLOWLIST.has(normalized)) {
+    throw new Error('支付宝网关地址不在允许列表中');
+  }
+  return normalized;
+};
 
 const nowAlipayTimestamp = () => {
   const d = new Date();
@@ -42,7 +69,15 @@ const getAlipayConfig = async () => {
   const cfg = await pickPaymentConfig();
   const a = cfg.alipay_f2f || {};
   const appId = String(a.app_id || '').trim();
-  const gateway = String(a.gateway || '').trim();
+  let gateway = String(a.gateway || '').trim();
+  if (gateway) {
+    try {
+      gateway = normalizeAlipayGateway(gateway);
+    } catch (e) {
+      logger.warn('alipay gateway invalid', { message: e?.message || String(e) });
+      gateway = '';
+    }
+  }
   const notifyDomain = String(a.notify_url || '').trim();
   const merchantPrivateKey = String(a.merchant_private_key || '').trim();
   const alipayPublicKey = String(a.alipay_public_key || '').trim();
@@ -67,6 +102,7 @@ const getWechatpayConfig = async () => {
 
 const alipayRequest = async ({ method, bizContent, config, requestId, purpose }) => {
   const p = String(purpose || 'api');
+  config.gateway = normalizeAlipayGateway(config.gateway);
   const encryptEnabled = typeof config.encryptKey === 'string' && config.encryptKey.trim().length > 0;
   const params = {
     app_id: config.appId,
@@ -151,11 +187,16 @@ const mapUnionpayRespCode = (respCode) => {
 const reconcileAlipayOrder = async (orderId, { requestId, purpose } = {}) => {
   const cfg = await getAlipayConfig();
   if (!cfg.appId || !cfg.gateway || !cfg.merchantPrivateKey) return { ok: false, error: '支付宝配置不完整' };
+  const local = await dbGet("SELECT id, total_amount FROM orders WHERE id = ?", [String(orderId)]).catch(() => null);
   const bizContent = { out_trade_no: String(orderId) };
   const json = await alipayRequest({ method: 'alipay.trade.query', bizContent, config: cfg, requestId, purpose });
   const resp = json.alipay_trade_query_response || {};
   const status = String(resp.trade_status || '').toUpperCase();
   const syncVia = purpose === 'manual_reconcile' ? 'manual_reconcile' : 'reconcile_job';
+  const expectedAmount = local && local.total_amount !== undefined && local.total_amount !== null ? toMoneyString(local.total_amount) : null;
+  const gotAmount = resp.total_amount !== undefined && resp.total_amount !== null ? toMoneyString(resp.total_amount) : null;
+  const amountOk = !expectedAmount || !gotAmount ? true : expectedAmount === gotAmount;
+  const amountMsg = amountOk ? '' : `金额校验失败 expected=${expectedAmount} got=${gotAmount}`;
   await updateOrderPayMeta({
     orderId,
     provider: 'alipay',
@@ -165,16 +206,17 @@ const reconcileAlipayOrder = async (orderId, { requestId, purpose } = {}) => {
     providerStatus: status || '',
     providerCode: resp.code || '',
     providerMsg: resp.msg || '',
-    providerSubMsg: resp.sub_msg || '',
+    providerSubMsg: amountMsg || resp.sub_msg || '',
     syncVia,
-    payStatus: String(resp.code) === '10000' ? mapAlipayTradeStatus(status) : 'failed'
+    payStatus: String(resp.code) === '10000' ? (amountOk ? mapAlipayTradeStatus(status) : 'failed') : 'failed'
   });
   if (String(resp.code) !== '10000') return { ok: false, error: resp.sub_msg || resp.msg || '查询失败', raw: resp };
   const paid = status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED';
-  if (paid) {
+  if (paid && amountOk) {
     await markOrderPaid({ orderId, provider: 'alipay', tradeNo: resp.trade_no || '', confirmedVia: 'reconcile' });
     await completePendingOrder(orderId).catch(() => {});
   }
+  if (!amountOk) return { ok: false, error: amountMsg, raw: resp };
   return { ok: true, paid, trade_status: status, trade_no: resp.trade_no || '', trace_id: resp.trace_id || '' };
 };
 
@@ -253,6 +295,7 @@ module.exports = {
   nowAlipayTimestamp,
   toMoneyString,
   normalizeNotifyDomain,
+  normalizeAlipayGateway,
   buildNotifyUrl,
   getAlipayConfig,
   getWechatpayConfig,
