@@ -9,11 +9,6 @@ const {
 } = require('../utils/crypto');
 const { updateOrderPayMeta, markOrderPaid, completePendingOrder } = require('./orderService');
 
-const ALIPAY_GATEWAY_ALLOWLIST = new Set([
-  'https://openapi.alipay.com/gateway.do',
-  'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
-]);
-
 const normalizeAlipayGateway = (input) => {
   const raw = String(input || '').trim();
   if (!raw) return '';
@@ -29,9 +24,6 @@ const normalizeAlipayGateway = (input) => {
     throw new Error('支付宝网关地址必须以 /gateway.do 结尾');
   }
   const normalized = `${u.origin}${pathName}`;
-  if (!ALIPAY_GATEWAY_ALLOWLIST.has(normalized)) {
-    throw new Error('支付宝网关地址不在允许列表中');
-  }
   return normalized;
 };
 

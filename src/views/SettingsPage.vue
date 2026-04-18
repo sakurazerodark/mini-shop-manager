@@ -34,11 +34,11 @@ const payment = ref({
   },
   alipay_f2f: {
     app_id: '',
-    gateway: 'https://openapi-sandbox.dl.alipaydev.com/gateway.do',
-    notify_url: '',
-    encrypt_key: '',
+    gateway: 'https://openapi.alipay.com/gateway.do',
     merchant_private_key: '',
-    alipay_public_key: ''
+    alipay_public_key: '',
+    encrypt_key: '',
+    notify_url: ''
   },
   unionpay: {
     merchant_id: '',
