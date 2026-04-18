@@ -8,7 +8,7 @@ import { queryAlipay, precreateAlipay, payAlipay } from '../api/payments'
 const barcodeInput = ref('')
 const barcodeInputRef = ref(null)
 const cart = ref([])
-const paymentMethod = ref('wechat')
+const paymentMethod = ref('alipay')
 const paymentConfig = ref(null)
 
 // 结账成功动画状态

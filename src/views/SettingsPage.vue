@@ -5,7 +5,7 @@ import { lookupBarcode } from '../api/products'
 import { globalStoreName } from '../store'
 
 const currentTab = ref('basic') // 'basic', 'payment'
-const paymentTab = ref('wechat')
+const paymentTab = ref('alipay')
 
 const storeName = ref('店小易')
 const isSavingBasic = ref(false)
