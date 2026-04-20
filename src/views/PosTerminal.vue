@@ -673,7 +673,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'alipay', disabled: !isPaymentEnabled('alipay') }]">
             <input type="radio" v-model="paymentMethod" value="alipay" class="hidden-radio" :disabled="!isPaymentEnabled('alipay')" />
             <div class="pay-icon alipay">
-              <svg viewBox="0 0 1024 1024" width="28" height="28"><path d="M724.31 346.75c3.27-37.3 4.2-76.37 2.44-116.71H476.9V135.25h-88.75v94.79H156.24v85.22h326.65c-37.4 92.83-99.78 171.74-177.34 227.17-21.75-27.16-47.53-50.68-75.33-70.18-19.38 27.67-43.23 51.52-69.66 70.18 51.98 25.1 99.4 56.64 141.48 93.36-121.76 56.36-221.76 137.95-221.76 238.16 0 71.9 66.86 119.5 167.66 119.5 137.47 0 263.7-65.51 341.26-170.81 74.39-101.4 117-234.33 118.49-375.9H724.31z m-413.6 447.8c-26.6-11.45-36.57-27.25-36.57-41.97 0-41.69 66.67-88.75 147.28-124.93-27.35 63.6-70.4 120.44-110.71 166.9z m233.15-188.85c-32.96 50.86-74.95 93.45-121.76 126.16 28.66-31.54 52.44-67.6 70.54-106.82 24.25-51.7 40.58-106.91 48.06-164.64h92.74c-6.81 54.1-26.88 103.73-89.58 145.3z" fill="#1677FF"/></svg>
+              <img src="https://gw.alipayobjects.com/zos/rmsportal/KDpgvguMpGfqaHPjicRK.svg" alt="支付宝" width="28" height="28" style="border-radius: 4px;" />
             </div>
             <span class="pay-name">支付宝</span>
             <div class="pay-badge" v-if="!isPaymentEnabled('alipay')">未配置</div>
@@ -682,7 +682,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'wechat', disabled: true }]">
             <input type="radio" v-model="paymentMethod" value="wechat" class="hidden-radio" disabled />
             <div class="pay-icon wechat">
-              <svg viewBox="0 0 1024 1024" width="28" height="28"><path d="M682.667 384c147.27 0 266.666 102.324 266.666 228.572 0 126.248-119.396 228.57-266.666 228.57-31.644 0-62.338-4.908-91.244-14.15l-84.708 42.128 22.484-75.148C485.496 763.504 416 701.378 416 612.572c0-126.248 119.396-228.572 266.667-228.572z m-34.582 121.142c-15.548 0-28.152 12.604-28.152 28.152s12.604 28.152 28.152 28.152 28.152-12.604 28.152-28.152-12.604-28.152-28.152-28.152z m138.83 0c-15.548 0-28.152 12.604-28.152 28.152s12.604 28.152 28.152 28.152 28.152-12.604 28.152-28.152-12.604-28.152-28.152-28.152zM362.667 170.667C568.85 170.667 736 304.382 736 469.333c0 24.316-3.328 47.98-9.67 70.804-14.074-2.45-28.57-3.804-43.663-3.804-176.73 0-320 122.774-320 274.285 0 25.166 3.844 49.626 11.144 72.822C167.332 866.52 32 743.095 32 586.667c0-99.308 64.72-187.68 168.172-243.636l-26.65-90.874 101.464 49.972c27.674-8.878 56.882-13.806 87.052-14.412l.628-.05zm-63.53 142.06c-21.768 0-39.414 17.646-39.414 39.414s17.646 39.414 39.414 39.414 39.414-17.646 39.414-39.414-17.646-39.414-39.414-39.414z m194.394 0c-21.768 0-39.414 17.646-39.414 39.414s17.646 39.414 39.414 39.414 39.414-17.646 39.414-39.414-17.646-39.414-39.414-39.414z" fill="#09B83E"/></svg>
+              <img src="https://gw.alipayobjects.com/zos/rmsportal/weZqEonjoTGBEGFdEUMV.svg" alt="微信支付" width="28" height="28" style="border-radius: 4px;" />
             </div>
             <span class="pay-name">微信支付</span>
             <div class="pay-badge" style="background-color: #f39c12; color: #fff;">开发中</div>
@@ -690,7 +690,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'unionpay', disabled: true }]">
             <input type="radio" v-model="paymentMethod" value="unionpay" class="hidden-radio" disabled />
             <div class="pay-icon unionpay">
-              <svg viewBox="0 0 1024 1024" width="28" height="28"><path d="M720 288H304c-61.76 0-112 50.24-112 112v224c0 61.76 50.24 112 112 112h416c61.76 0 112-50.24 112-112V400c0-61.76-50.24-112-112-112z m48 336c0 26.4-21.6 48-48 48H304c-26.4 0-48-21.6-48-48V400c0-26.4 21.6-48 48-48h416c26.4 0 48 21.6 48 48v224zM544 384H368c-17.6 0-32 14.4-32 32v192c0 17.6 14.4 32 32 32h176c17.6 0 32-14.4 32-32V416c0-17.6-14.4-32-32-32z m-32 192H400V448h112v128z m160-192h-64c-17.6 0-32 14.4-32 32v192c0 17.6 14.4 32 32 32h64c17.6 0 32-14.4 32-32V416c0-17.6-14.4-32-32-32z m-32 192h-16V448h16v128z" fill="#005A9E"/><path d="M576 480h16v16h-16z" fill="#E60012"/><path d="M608 576h16v16h-16z" fill="#00A29A"/></svg>
+              <img src="https://gw.alipayobjects.com/zos/rmsportal/kZzEldyRbzeRFjiI6yqy.svg" alt="云闪付" width="28" height="28" style="border-radius: 4px;" />
             </div>
             <span class="pay-name">云闪付</span>
             <div class="pay-badge" style="background-color: #f39c12; color: #fff;">开发中</div>
@@ -1220,9 +1220,16 @@ onUnmounted(() => {
 }
 
 .pay-method.disabled {
-  opacity: 0.55;
   cursor: not-allowed;
-  background: #f1f5f9;
+  background: #f8fafc;
+}
+
+.pay-method.disabled .pay-icon {
+  filter: grayscale(100%) opacity(0.6);
+}
+
+.pay-method.disabled .pay-name {
+  color: var(--text-muted);
 }
 
 .pay-method.disabled:hover {
