@@ -3,6 +3,7 @@ import PosTerminal from '../views/PosTerminal.vue'
 import InventoryManager from '../views/InventoryManager.vue'
 import SalesReport from '../views/SalesReport.vue'
 import SettingsPage from '../views/SettingsPage.vue'
+import StockLogsReport from '../views/StockLogsReport.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/settings',
     name: 'SettingsPage',
     component: SettingsPage
+  },
+  {
+    path: '/stock-logs',
+    name: 'StockLogsReport',
+    component: StockLogsReport
   }
 ]
 

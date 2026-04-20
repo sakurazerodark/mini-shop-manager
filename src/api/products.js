@@ -12,5 +12,6 @@ export const productLoss = (id, data) => request.post(`/products/${id}/loss`, da
 export const productRestock = (id, data) => request.post(`/products/${id}/restock`, data)
 export const productAdjust = (id, data) => request.post(`/products/${id}/adjust`, data)
 export const getProductLogs = (id) => request.get(`/products/${id}/logs`)
+export const getAllStockLogs = (params) => request.get('/products/stock-logs', { params })
 export const updateProductPrices = (id, data) => request.put(`/products/${id}/prices`, data)
 export const getProductPriceLogs = (id) => request.get(`/products/${id}/price-logs`)

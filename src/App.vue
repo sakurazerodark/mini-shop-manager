@@ -96,6 +96,15 @@ const setView = (path) => {
           <span class="nav-icon">📦</span>
           <span class="nav-text" v-show="!isSidebarCollapsed">商品与库存</span>
         </a>
+        <a 
+          href="#" 
+          :class="['nav-item', { active: route.path === '/stock-logs' }]" 
+          @click.prevent="setView('/stock-logs')"
+          :title="isSidebarCollapsed ? '库存变动报表' : ''"
+        >
+          <span class="nav-icon">📈</span>
+          <span class="nav-text" v-show="!isSidebarCollapsed">库存变动</span>
+        </a>
         <div class="nav-item-group" :class="{ 'is-expanded': expandReport && !isSidebarCollapsed }">
           <a 
             href="#" 

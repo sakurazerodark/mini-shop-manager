@@ -3,6 +3,7 @@ const router = express.Router();
 const productController = require('../controllers/productController');
 
 router.get('/', productController.getAllProducts);
+router.get('/stock-logs', productController.getAllStockLogs);
 router.get('/deleted', productController.getDeletedProducts);
 router.post('/', productController.addProduct);
 router.get('/barcode/:barcode', productController.getProductByBarcode);

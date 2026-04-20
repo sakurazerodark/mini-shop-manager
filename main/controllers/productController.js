@@ -381,6 +381,39 @@ exports.getProductStockLogs = (req, res) => {
   });
 };
 
+exports.getAllStockLogs = (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
+
+  const countSql = `SELECT COUNT(*) as total FROM stock_logs`;
+  db.get(countSql, [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const total = row ? row.total : 0;
+    const totalPages = Math.ceil(total / limit);
+
+    const dataSql = `
+      SELECT s.*, p.name as product_name, p.barcode as product_barcode, p.unit as product_unit
+      FROM stock_logs s
+      LEFT JOIN products p ON s.product_id = p.id
+      ORDER BY s.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    db.all(dataSql, [limit, offset], (err2, rows) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({
+        data: rows,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages
+        }
+      });
+    });
+  });
+};
+
 exports.deleteProduct = (req, res) => {
   const sql = "UPDATE products SET deleted_at = datetime('now', 'localtime'), barcode = barcode || '_deleted_' || id WHERE id = ?";
   db.run(sql, [req.params.id], function(err) {
