@@ -110,10 +110,12 @@ exports.getBarcodeLookup = async (req, res) => {
   try {
     const provider = (process.env.BARCODE_CN_PROVIDER || await settingService.getSetting('barcode_cn_provider', 'tanshuapi')).trim();
     const key = (process.env.TANSHUAPI_KEY || await settingService.getSetting('tanshuapi_key', '')).trim();
+    const autoLookup = await settingService.getSetting('barcode_auto_lookup', 'true');
     res.json({
       data: {
         provider,
-        tanshuapi_key_set: Boolean(key)
+        tanshuapi_key_set: Boolean(key),
+        auto_lookup: autoLookup === 'true'
       }
     });
   } catch (e) {
@@ -122,13 +124,14 @@ exports.getBarcodeLookup = async (req, res) => {
 };
 
 exports.updateBarcodeLookup = async (req, res) => {
-  const { provider, tanshuapi_key } = req.body || {};
+  const { provider, tanshuapi_key, auto_lookup } = req.body || {};
   if (provider && provider !== 'tanshuapi') {
     return res.status(400).json({ error: 'provider 暂仅支持 tanshuapi' });
   }
   try {
     if (provider) await settingService.setSetting('barcode_cn_provider', provider);
     if (typeof tanshuapi_key === 'string') await settingService.setSetting('tanshuapi_key', tanshuapi_key.trim());
+    if (typeof auto_lookup === 'boolean') await settingService.setSetting('barcode_auto_lookup', String(auto_lookup));
     res.json({ message: '条码识别配置已更新' });
   } catch (e) {
     res.status(500).json({ error: e.message });

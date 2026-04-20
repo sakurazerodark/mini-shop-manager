@@ -21,6 +21,7 @@ const provider = ref('tanshuapi')
 const tanshuapiKey = ref('')
 const tanshuapiKeySet = ref(false)
 const isSaving = ref(false)
+const barcodeAutoLookup = ref(true)
 
 const payment = ref({
   wechatpay_v3: {
@@ -77,6 +78,7 @@ const fetchSettings = async () => {
       const json = await res.json()
       provider.value = json?.data?.provider || 'tanshuapi'
       tanshuapiKeySet.value = Boolean(json?.data?.tanshuapi_key_set)
+      barcodeAutoLookup.value = json?.data?.auto_lookup ?? true
     }
 
     const resNetwork = await getNetworkConfig().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
@@ -298,7 +300,7 @@ const saveNetworkSettings = async () => {
 const saveSettings = async () => {
   isSaving.value = true
   try {
-    const payload = { provider: provider.value }
+    const payload = { provider: provider.value, auto_lookup: barcodeAutoLookup.value }
     if (tanshuapiKey.value.trim()) payload.tanshuapi_key = tanshuapiKey.value.trim()
     const res = await updateBarcodeLookup(payload).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
@@ -434,19 +436,30 @@ onMounted(() => {
 
       <section class="card">
         <div class="card-head">
-          <div class="card-title">条码识别（中国）</div>
-          <div class="badge" :class="tanshuapiKeySet ? 'ok' : 'warn'">{{ tanshuapiKeySet ? '已配置' : '未配置' }}</div>
+          <div class="card-title">条码识别配置</div>
+          <div class="badge" :class="tanshuapiKeySet ? 'ok' : 'warn'">
+            {{ tanshuapiKeySet ? 'Key 已配置' : 'Key 未配置' }}
+          </div>
         </div>
 
         <div class="form">
           <div class="form-group">
-            <label>平台</label>
+            <label>是否启用条码自动识别 (联网查询)</label>
+            <div class="toggle-switch" style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="autoLookupToggle" v-model="barcodeAutoLookup" style="width: 18px; height: 18px; cursor: pointer;" />
+              <label for="autoLookupToggle" style="margin-bottom: 0; cursor: pointer;"></label>
+              <span class="toggle-label" style="font-size: 14px; color: var(--text-main);">{{ barcodeAutoLookup ? '已开启' : '已关闭' }}</span>
+            </div>
+          </div>
+
+          <div class="form-group" v-if="barcodeAutoLookup">
+            <label>服务商</label>
             <select v-model="provider" class="form-select">
-              <option value="tanshuapi">探数API - 商品条码查询</option>
+              <option value="tanshuapi">探数API (api.tanshuapi.com)</option>
             </select>
           </div>
 
-          <div class="form-group">
+          <div class="form-group" v-if="barcodeAutoLookup">
             <label>Key <span class="hint">不回显，留空则不修改</span></label>
             <input v-model="tanshuapiKey" type="password" class="form-input" placeholder="输入探数API key" />
           </div>
@@ -457,7 +470,7 @@ onMounted(() => {
             </button>
           </div>
 
-          <div class="note">
+          <div class="note" v-if="barcodeAutoLookup">
             <div class="note-title">接口说明</div>
             <div class="note-text">探数API接口：api.tanshuapi.com /api/barcode/v1/index</div>
             <div class="note-text">图片字段有效期24小时；需要长期保存建议上传图片或下载后再上传。</div>

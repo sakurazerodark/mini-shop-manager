@@ -52,6 +52,9 @@ const normalizeLookup = (payload, source) => {
 };
 
 const lookupBarcodeCN = async (barcode) => {
+  const autoLookup = await getSetting('barcode_auto_lookup', 'true');
+  if (autoLookup !== 'true') return null;
+
   const urlTpl = process.env.BARCODE_CN_LOOKUP_URL || process.env.BARCODE_LOOKUP_CN_URL;
   if (urlTpl) {
     const headers = parseJsonFromEnv(process.env.BARCODE_CN_LOOKUP_HEADERS) || {};
