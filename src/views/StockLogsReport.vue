@@ -114,19 +114,19 @@ const getTypeColor = (type) => {
 .table-container { overflow-x: auto; min-height: 300px; position: relative; }
 .table-container.loading { opacity: 0.6; pointer-events: none; }
 .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.data-table th { background: var(--bg-body); padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color); white-space: nowrap; }
+.data-table th { background: var(--bg-color); padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color); white-space: nowrap; }
 .data-table td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; color: var(--text-main); }
-.data-table tr:hover td { background-color: var(--bg-body); }
+.data-table tr:hover td { background-color: var(--bg-color); }
 .time-cell { font-family: monospace; color: var(--text-muted); white-space: nowrap; }
 .type-tag { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #fff; }
-.bg-primary { background-color: var(--primary-color); }
-.bg-success { background-color: var(--success-color); }
-.bg-warning { background-color: #f39c12; }
-.bg-danger { background-color: var(--danger-color); }
+.bg-primary { background-color: var(--primary); }
+.bg-success { background-color: var(--success); }
+.bg-warning { background-color: var(--warning); }
+.bg-danger { background-color: var(--danger); }
 .bg-info { background-color: #00bcd4; }
 .bg-secondary { background-color: var(--text-muted); }
-.color-success { color: var(--success-color); }
-.color-danger { color: var(--danger-color); }
+.color-success { color: var(--success); }
+.color-danger { color: var(--danger); }
 .text-muted { color: var(--text-muted); font-size: 14px; }
 .empty-state { text-align: center; padding: 48px; color: var(--text-muted); }
 .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }

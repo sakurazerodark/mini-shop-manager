@@ -1768,6 +1768,7 @@ onMounted(() => {
 .type-tag.color-success { color: var(--success); background: var(--success-bg); }
 .type-tag.color-danger { color: var(--danger); background: var(--danger-bg); }
 .type-tag.color-warning { color: #b45309; background: var(--warning-bg); }
+.type-tag.color-muted { color: var(--text-muted); background: var(--border-color); }
 
 .time-cell {
   font-size: 13px;
