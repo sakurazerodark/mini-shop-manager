@@ -159,6 +159,7 @@ const fetchPaymentConfig = async () => {
 
 const isPaymentEnabled = (method) => {
   if (method === 'cash') return true
+  if (method === 'personal_qrcode') return true
   if (method === 'wechat') return false // 开发中
   if (method === 'unionpay') return false // 开发中
 
