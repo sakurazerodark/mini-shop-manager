@@ -430,7 +430,7 @@ const checkout = async () => {
     return
   }
 
-  if (paymentMethod.value === 'cash') {
+  if (paymentMethod.value === 'cash' || paymentMethod.value === 'personal_qrcode') {
     await finalizeOrder()
     return
   }
@@ -763,12 +763,12 @@ onUnmounted(() => {
           <div class="receipt-row">
             <span class="r-label">支付方式</span>
             <span class="r-value method">
-              {{ successData.payMethod === 'wechat' ? '微信支付' : successData.payMethod === 'alipay' ? '支付宝' : successData.payMethod === 'unionpay' ? '云闪付' : '现金收款' }}
+              {{ successData.payMethod === 'wechat' ? '微信支付' : successData.payMethod === 'alipay' ? '支付宝' : successData.payMethod === 'unionpay' ? '云闪付' : successData.payMethod === 'personal_qrcode' ? '客户主扫收款码' : '现金收款' }}
             </span>
           </div>
           <div class="receipt-row" v-if="successData.confirmedVia">
             <span class="r-label">确认来源</span>
-            <span class="r-value">{{ successData.confirmedVia === 'callback' ? '回调' : successData.confirmedVia === 'polling' ? '轮询' : successData.confirmedVia === 'cash' ? '现金' : successData.confirmedVia === 'manual' ? '人工' : successData.confirmedVia === 'reconcile' ? '补偿' : successData.confirmedVia }}</span>
+            <span class="r-value">{{ successData.confirmedVia === 'callback' ? '回调' : successData.confirmedVia === 'polling' ? '轮询' : successData.confirmedVia === 'cash' ? '现金' : successData.confirmedVia === 'personal_qrcode' ? '扫码' : successData.confirmedVia === 'manual' ? '人工' : successData.confirmedVia === 'reconcile' ? '补偿' : successData.confirmedVia }}</span>
           </div>
           <div class="receipt-divider"></div>
           <div class="receipt-row text-small">
@@ -836,7 +836,7 @@ onUnmounted(() => {
           </div>
 
           <div class="pay-method-hint">
-            <span class="tag">{{ paymentMethod === 'wechat' ? '微信支付' : paymentMethod === 'alipay' ? '支付宝' : '云闪付' }}</span>
+            <span class="tag">{{ paymentMethod === 'wechat' ? '微信支付' : paymentMethod === 'alipay' ? '支付宝' : paymentMethod === 'personal_qrcode' ? '客户主扫收款码' : paymentMethod === 'cash' ? '现金收款' : '云闪付' }}</span>
             <span class="text-muted" v-if="paymentMethod !== 'alipay'">暂未接入真实支付接口，将以手动确认模拟流程</span>
             <span class="text-muted" v-else>{{ isPayPolling ? '轮询中：等待支付结果...' : '准备收款：直接用扫码枪扫顾客付款码，或让顾客扫下方二维码' }}</span>
           </div>
