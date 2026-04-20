@@ -673,7 +673,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'alipay', disabled: !isPaymentEnabled('alipay') }]">
             <input type="radio" v-model="paymentMethod" value="alipay" class="hidden-radio" :disabled="!isPaymentEnabled('alipay')" />
             <div class="pay-icon alipay">
-              <img src="https://gw.alipayobjects.com/zos/rmsportal/KDpgvguMpGfqaHPjicRK.svg" alt="支付宝" width="28" height="28" style="border-radius: 4px;" />
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 16 16"><path fill="#1677ff" d="M2.541 0H13.5a2.55 2.55 0 0 1 2.54 2.563v8.297c-.006 0-.531-.046-2.978-.813-.412-.14-.916-.327-1.479-.536q-.456-.17-.957-.353a13 13 0 0 0 1.325-3.373H8.822V4.649h3.831v-.634h-3.83V2.121H7.26c-.274 0-.274.273-.274.273v1.621H3.11v.634h3.875v1.136h-3.2v.634H9.99c-.227.789-.532 1.53-.894 2.202-2.013-.67-4.161-1.212-5.51-.878-.864.214-1.42.597-1.746.998-1.499 1.84-.424 4.633 2.741 4.633 1.872 0 3.675-1.053 5.072-2.787 2.08 1.008 6.37 2.738 6.387 2.745v.105A2.55 2.55 0 0 1 13.5 16H2.541A2.55 2.55 0 0 1 0 13.437V2.563A2.55 2.55 0 0 1 2.541 0"/><path fill="#fff" d="M2.309 9.27c-1.22 1.073-.49 3.034 1.978 3.034 1.434 0 2.868-.925 3.994-2.406-1.602-.789-2.959-1.353-4.425-1.207-.397.04-1.14.217-1.547.58Z"/></svg>
             </div>
             <span class="pay-name">支付宝</span>
             <div class="pay-badge" v-if="!isPaymentEnabled('alipay')">未配置</div>
@@ -682,7 +682,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'wechat', disabled: true }]">
             <input type="radio" v-model="paymentMethod" value="wechat" class="hidden-radio" disabled />
             <div class="pay-icon wechat">
-              <img src="https://gw.alipayobjects.com/zos/rmsportal/weZqEonjoTGBEGFdEUMV.svg" alt="微信支付" width="28" height="28" style="border-radius: 4px;" />
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"><path fill="#09B83E" d="M9.27 14.669a.662.662 0 0 1-.88-.269l-.043-.095-1.818-3.998a.473.473 0 0 1 0-.145.327.327 0 0 1 .335-.328.305.305 0 0 1 .196.066l2.18 1.527a.989.989 0 0 0 .546.167.894.894 0 0 0 .342-.066l10.047-4.5a10.73 10.73 0 0 0-8.171-3.526C6.478 3.502 2 7.232 2 11.87a7.83 7.83 0 0 0 3.46 6.296.662.662 0 0 1 .24.727l-.45 1.701a.945.945 0 0 0-.051.24.327.327 0 0 0 .334.334.414.414 0 0 0 .19-.058l2.18-1.265c.16-.098.343-.151.531-.152.099 0 .197.014.29.043 1.063.3 2.161.452 3.265.45 5.525 0 10.01-3.729 10.01-8.33a7.226 7.226 0 0 0-1.097-3.883L9.35 14.625l-.08.044z"/></svg>
             </div>
             <span class="pay-name">微信支付</span>
             <div class="pay-badge" style="background-color: #f39c12; color: #fff;">开发中</div>
@@ -690,7 +690,7 @@ onUnmounted(() => {
           <label :class="['pay-method', { active: paymentMethod === 'unionpay', disabled: true }]">
             <input type="radio" v-model="paymentMethod" value="unionpay" class="hidden-radio" disabled />
             <div class="pay-icon unionpay">
-              <img src="https://gw.alipayobjects.com/zos/rmsportal/kZzEldyRbzeRFjiI6yqy.svg" alt="云闪付" width="28" height="28" style="border-radius: 4px;" />
+              <svg width="28" height="28" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M720 288H304c-61.76 0-112 50.24-112 112v224c0 61.76 50.24 112 112 112h416c61.76 0 112-50.24 112-112V400c0-61.76-50.24-112-112-112z m48 336c0 26.4-21.6 48-48 48H304c-26.4 0-48-21.6-48-48V400c0-26.4 21.6-48 48-48h416c26.4 0 48 21.6 48 48v224zM544 384H368c-17.6 0-32 14.4-32 32v192c0 17.6 14.4 32 32 32h176c17.6 0 32-14.4 32-32V416c0-17.6-14.4-32-32-32z m-32 192H400V448h112v128z m160-192h-64c-17.6 0-32 14.4-32 32v192c0 17.6 14.4 32 32 32h64c17.6 0 32-14.4 32-32V416c0-17.6-14.4-32-32-32z m-32 192h-16V448h16v128z" fill="#005A9E"/><path d="M576 480h16v16h-16z" fill="#E60012"/><path d="M608 576h16v16h-16z" fill="#00A29A"/></svg>
             </div>
             <span class="pay-name">云闪付</span>
             <div class="pay-badge" style="background-color: #f39c12; color: #fff;">开发中</div>
