@@ -77,7 +77,7 @@ function initDb() {
         status TEXT DEFAULT 'completed',
         refunded_amount REAL DEFAULT 0,
         refund_status TEXT DEFAULT 'none',
-        created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -105,7 +105,7 @@ function initDb() {
         unit_cost_price REAL,
         unit_retail_price REAL,
         operator TEXT,
-        created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     `);
@@ -125,7 +125,7 @@ function initDb() {
         old_price REAL,
         new_price REAL,
         reason TEXT,
-        created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     `);
@@ -136,7 +136,7 @@ function initDb() {
         product_id INTEGER,
         qty_remaining REAL,
         unit_cost_price REAL,
-        created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     `);
@@ -151,7 +151,7 @@ function initDb() {
         refund_reason TEXT,
         operator TEXT,
         trace_id TEXT,
-        created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -163,7 +163,7 @@ function initDb() {
         contact TEXT,
         phone TEXT,
         address TEXT,
-        created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 

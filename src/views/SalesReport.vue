@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getTodayStats, getRecentOrders, getOrders, manualPayOrder as apiManualPayOrder, cancelOrder as apiCancelOrder, getOrder, refundOrder } from '../api/orders'
+import { formatDateTime } from '../utils/format'
 
 const route = useRoute()
 const currentTab = computed(() => route.query.tab || 'dashboard')
@@ -436,7 +437,7 @@ const pageSubtitle = computed(() => {
                     <span class="dot"></span>{{ order.status }}
                   </span>
                 </td>
-                <td class="time-cell">{{ new Date(order.created_at).toLocaleString() }}</td>
+                <td class="time-cell">{{ formatDateTime(order.created_at) }}</td>
               </tr>
               <tr v-if="recentOrders.length === 0">
                 <td colspan="6">
@@ -493,7 +494,7 @@ const pageSubtitle = computed(() => {
                     <span class="dot"></span>{{ order.status }}
                   </span>
                 </td>
-                <td class="time-cell">{{ new Date(order.created_at).toLocaleString() }}</td>
+                <td class="time-cell">{{ formatDateTime(order.created_at) }}</td>
               </tr>
               <tr v-if="allOrders.length === 0">
                 <td colspan="6"><div class="empty-state"><p>暂无记录</p></div></td>
@@ -553,7 +554,7 @@ const pageSubtitle = computed(() => {
                   </span>
                 </td>
                 <td style="font-size: 12px;">{{ order.pay_last_sync_via || '-' }}</td>
-                <td class="time-cell">{{ order.pay_last_sync_at ? new Date(order.pay_last_sync_at).toLocaleString() : '-' }}</td>
+                <td class="time-cell">{{ order.pay_last_sync_at ? formatDateTime(order.pay_last_sync_at) : '-' }}</td>
               </tr>
               <tr v-if="paymentOrders.length === 0">
                 <td colspan="6"><div class="empty-state"><p>暂无记录</p></div></td>
@@ -612,7 +613,7 @@ const pageSubtitle = computed(() => {
                     <span class="dot"></span>{{ order.status }}
                   </span>
                 </td>
-                <td class="time-cell">{{ new Date(order.created_at).toLocaleString() }}</td>
+                <td class="time-cell">{{ formatDateTime(order.created_at) }}</td>
                 <td>
                   <div style="display:flex;gap:8px;" v-if="order.status === 'abnormal'">
                     <button class="btn btn-secondary" style="padding:2px 8px;font-size:12px" @click="manualPayOrder(order.id)">转为支付</button>
@@ -663,7 +664,7 @@ const pageSubtitle = computed(() => {
               </div>
               <div class="meta-row">
                 <span class="meta-label">时间</span>
-                <span class="meta-value">{{ new Date(orderDetail.order.created_at).toLocaleString() }}</span>
+                <span class="meta-value">{{ formatDateTime(orderDetail.order.created_at) }}</span>
               </div>
               <div class="meta-row">
                 <span class="meta-label">状态</span>

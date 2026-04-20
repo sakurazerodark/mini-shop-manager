@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getAllStockLogs } from '../api/products'
+import { formatDateTime } from '../utils/format'
 
 const logs = ref([])
 const loading = ref(true)
@@ -71,7 +72,7 @@ const getTypeColor = (type) => {
           </thead>
           <tbody>
             <tr v-for="log in logs" :key="log.id">
-              <td class="time-cell">{{ new Date(log.created_at).toLocaleString() }}</td>
+              <td class="time-cell">{{ formatDateTime(log.created_at) }}</td>
               <td>{{ log.product_name || '-' }}</td>
               <td class="text-muted">{{ log.product_barcode || '-' }}</td>
               <td><span class="type-tag" :class="getTypeColor(log.change_type)">{{ formatChangeType(log.change_type) }}</span></td>

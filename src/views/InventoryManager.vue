@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getProducts, getDeletedProducts, getProductByBarcode, lookupBarcode, createProduct, updateProduct, deleteProduct as apiDeleteProduct, restoreProduct, productLoss, productRestock, productAdjust, getProductLogs, updateProductPrices, getProductPriceLogs } from '../api/products'
+import { formatDateTime } from '../utils/format'
 import { getSuppliers, createSupplier, deleteSupplier as apiDeleteSupplier } from '../api/suppliers'
 import { getBarcodeLookup, updateBarcodeLookup, getCostingMode, updateCostingMode } from '../api/settings'
 
@@ -1092,7 +1093,7 @@ onMounted(() => {
             </thead>
             <tbody>
               <tr v-for="l in priceLogs" :key="l.id">
-                <td class="time-cell">{{ new Date(l.created_at).toLocaleString() }}</td>
+                <td class="time-cell">{{ formatDateTime(l.created_at) }}</td>
                 <td class="text-muted">{{ formatPriceType(l.price_type) }}</td>
                 <td>¥{{ Number(l.old_price || 0).toFixed(2) }}</td>
                 <td>¥{{ Number(l.new_price || 0).toFixed(2) }}</td>
