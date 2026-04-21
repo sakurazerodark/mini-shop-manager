@@ -390,13 +390,21 @@ exports.getAllStockLogs = (req, res) => {
   let whereClause = '1=1';
   let params = [];
 
+  // 前端传入的 startDate/endDate 是用户所在时区的日期字符串（例如：2024-04-18）
+  // 数据库存储的是 UTC 时间（CURRENT_TIMESTAMP）。
+  // 为了确保完全准确且不受服务器/容器时区配置影响，
+  // 我们应当将其视为用户的本地时间区间，然后转化为对应的 UTC 时间字符串去数据库中比对
   if (startDate) {
-    whereClause += " AND date(s.created_at, 'localtime') >= ?";
-    params.push(startDate);
+    const startObj = new Date(`${startDate}T00:00:00.000`);
+    const startUtcStr = startObj.toISOString().replace('T', ' ').substring(0, 19);
+    whereClause += " AND s.created_at >= ?";
+    params.push(startUtcStr);
   }
   if (endDate) {
-    whereClause += " AND date(s.created_at, 'localtime') <= ?";
-    params.push(endDate);
+    const endObj = new Date(`${endDate}T23:59:59.999`);
+    const endUtcStr = endObj.toISOString().replace('T', ' ').substring(0, 19);
+    whereClause += " AND s.created_at <= ?";
+    params.push(endUtcStr);
   }
 
   const countSql = `SELECT COUNT(*) as total FROM stock_logs s WHERE ${whereClause}`;
