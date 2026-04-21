@@ -385,9 +385,22 @@ exports.getAllStockLogs = (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 20));
   const offset = (page - 1) * limit;
+  const { startDate, endDate } = req.query;
 
-  const countSql = `SELECT COUNT(*) as total FROM stock_logs`;
-  db.get(countSql, [], (err, row) => {
+  let whereClause = '1=1';
+  let params = [];
+
+  if (startDate) {
+    whereClause += " AND date(s.created_at, 'localtime') >= ?";
+    params.push(startDate);
+  }
+  if (endDate) {
+    whereClause += " AND date(s.created_at, 'localtime') <= ?";
+    params.push(endDate);
+  }
+
+  const countSql = `SELECT COUNT(*) as total FROM stock_logs s WHERE ${whereClause}`;
+  db.get(countSql, params, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     const total = row ? row.total : 0;
     const totalPages = Math.ceil(total / limit);
@@ -396,10 +409,11 @@ exports.getAllStockLogs = (req, res) => {
       SELECT s.*, p.name as product_name, p.barcode as product_barcode, p.unit as product_unit
       FROM stock_logs s
       LEFT JOIN products p ON s.product_id = p.id
+      WHERE ${whereClause}
       ORDER BY s.created_at DESC
       LIMIT ? OFFSET ?
     `;
-    db.all(dataSql, [limit, offset], (err2, rows) => {
+    db.all(dataSql, [...params, limit, offset], (err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
       res.json({
         data: rows,

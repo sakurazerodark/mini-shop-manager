@@ -9,11 +9,18 @@ const page = ref(1)
 const limit = ref(20)
 const totalPages = ref(1)
 
+const startDate = ref('')
+const endDate = ref('')
+
 const fetchLogs = async (p = 1) => {
   page.value = p
   loading.value = true
   try {
-    const res = await getAllStockLogs({ page: p, limit: limit.value }).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
+    const params = { page: p, limit: limit.value }
+    if (startDate.value) params.startDate = startDate.value
+    if (endDate.value) params.endDate = endDate.value
+    
+    const res = await getAllStockLogs(params).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
       const data = await res.json()
       logs.value = data.data || []
@@ -52,7 +59,13 @@ const getTypeColor = (type) => {
         <h1 class="page-title">📦 库存变动报表</h1>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="fetchLogs(1)">刷新</button>
+        <div class="filter-group">
+          <input type="date" v-model="startDate" class="filter-input" placeholder="开始日期" />
+          <span class="filter-separator">至</span>
+          <input type="date" v-model="endDate" class="filter-input" placeholder="结束日期" />
+          <button class="btn btn-primary" @click="fetchLogs(1)" style="margin-left: 8px;">查询</button>
+        </div>
+        <button class="btn btn-secondary" @click="fetchLogs(1)" style="margin-left: 12px;">刷新</button>
       </div>
     </div>
 
@@ -110,6 +123,11 @@ const getTypeColor = (type) => {
 .page-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-title { font-size: 24px; font-weight: 600; color: var(--text-main); margin: 0; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.filter-group { display: flex; align-items: center; background: #fff; padding: 4px; border-radius: 8px; border: 1px solid var(--border-color); }
+.filter-input { border: none; padding: 6px 12px; border-radius: 4px; outline: none; color: var(--text-main); font-family: inherit; font-size: 14px; background: transparent; }
+.filter-input:focus { background: var(--bg-color); }
+.filter-separator { color: var(--text-muted); font-size: 13px; margin: 0 4px; }
 .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); padding: 24px; }
 .table-container { overflow-x: auto; min-height: 300px; position: relative; }
 .table-container.loading { opacity: 0.6; pointer-events: none; }
