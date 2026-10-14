@@ -53,6 +53,7 @@ const payment = ref({
 const paymentStatus = ref(null)
 const isSavingPayment = ref(false)
 const pollIntervalSec = ref(2)
+const paymentPreferences = ref({ default_method: 'alipay', methods: [] })
 
 const testBarcode = ref('')
 const testResult = ref(null)
@@ -99,6 +100,7 @@ const fetchPaymentSettings = async () => {
     if (!res.ok) return
     const json = await res.json()
     paymentStatus.value = json?.data || null
+    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'alipay', methods: [] }
     pollIntervalSec.value = Math.max(1, Math.floor(Number(paymentStatus.value?.poll_interval_ms || 2000) / 1000))
     payment.value.wechatpay_v3.mchid = paymentStatus.value?.wechatpay_v3?.mchid || ''
     payment.value.wechatpay_v3.appid = paymentStatus.value?.wechatpay_v3?.appid || ''
@@ -126,6 +128,7 @@ const savePaymentScope = async (scope) => {
 
     if (s === 'general' || s === 'all') {
       payload.poll_interval_ms = pollMs
+      payload.payment_preferences = paymentPreferences.value
     }
 
     if (s === 'wechat' || s === 'all') {
@@ -191,6 +194,20 @@ const savePaymentScope = async (scope) => {
   } finally {
     isSavingPayment.value = false
   }
+}
+
+const movePaymentMethod = (index, offset) => {
+  const methods = paymentPreferences.value.methods || []
+  const target = index + offset
+  if (target < 0 || target >= methods.length) return
+  const current = methods[index]
+  methods[index] = methods[target]
+  methods[target] = current
+  methods.forEach((method, sortIndex) => { method.sort = (sortIndex + 1) * 10 })
+}
+
+const setDefaultPaymentMethod = (method) => {
+  if (method?.enabled) paymentPreferences.value.default_method = method.id
 }
 
 const savePaymentSettings = async () => {
@@ -700,6 +717,24 @@ onMounted(() => {
           </div>
           <div class="form">
             <div class="form-group">
+              <label>支付方式顺序与默认方式</label>
+              <div class="payment-preference-list">
+                <div v-for="(method, index) in paymentPreferences.methods" :key="method.id" class="payment-preference-row">
+                  <div class="payment-preference-main">
+                    <input type="checkbox" v-model="method.enabled" @change="method.enabled || (paymentPreferences.default_method === method.id ? paymentPreferences.default_method = paymentPreferences.methods.find(item => item.enabled)?.id || '' : null)" />
+                    <span>{{ method.name }}</span>
+                    <small>{{ method.category }}</small>
+                  </div>
+                  <div class="payment-preference-actions">
+                    <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="movePaymentMethod(index, -1)" title="上移">上移</button>
+                    <button class="btn btn-secondary" type="button" :disabled="index === paymentPreferences.methods.length - 1" @click="movePaymentMethod(index, 1)" title="下移">下移</button>
+                    <label class="default-choice"><input type="radio" name="default-payment-method" :checked="paymentPreferences.default_method === method.id" :disabled="!method.enabled" @change="setDefaultPaymentMethod(method)" /> 默认</label>
+                  </div>
+                </div>
+              </div>
+              <div class="hint">收银台将按此顺序展示启用的方式；停用默认方式后会自动选择第一个启用方式。</div>
+            </div>
+            <div class="form-group">
               <label>支付结果轮询间隔（秒） <span class="hint">不得小于 1 秒</span></label>
               <input v-model.number="pollIntervalSec" type="number" min="1" step="1" class="form-input" placeholder="默认 2 秒" />
             </div>
@@ -747,6 +782,49 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 14px;
   color: var(--text-light);
+}
+
+.payment-preference-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.payment-preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+}
+
+.payment-preference-main,
+.payment-preference-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.payment-preference-main small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.payment-preference-actions .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.default-choice {
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .tabs-nav {

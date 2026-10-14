@@ -156,6 +156,10 @@ exports.updatePayments = async (req, res) => {
     const current = await settingService.getPaymentConfigRaw();
     const next = { ...current };
 
+    if (body.payment_preferences) {
+      next.payment_preferences = settingService.normalizePaymentPreferences(body.payment_preferences);
+    }
+
     if (body.wechatpay_v3) {
       next.wechatpay_v3 = { ...(current.wechatpay_v3 || {}) };
       const src = body.wechatpay_v3 || {};

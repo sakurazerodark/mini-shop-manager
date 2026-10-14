@@ -68,7 +68,7 @@ function startServer() {
       setInterval(async () => {
         try {
           const rows = await dbAll(
-            "SELECT id FROM orders WHERE status = 'pending' AND (pay_provider = 'alipay' OR pay_method = 'alipay') AND (pay_status IS NULL OR pay_status != 'paid') ORDER BY created_at DESC LIMIT 20"
+            "SELECT id FROM orders WHERE status = 'pending' AND (pay_provider = 'alipay' OR pay_method IN ('alipay', 'alipay_scan')) AND (pay_status IS NULL OR pay_status != 'paid') ORDER BY created_at DESC LIMIT 20"
           );
           if (!rows?.length) return;
           for (const r of rows) {

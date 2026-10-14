@@ -20,12 +20,14 @@ const recentOrders = ref([])
 const allOrders = ref([])
 const ordersPage = ref(1)
 const ordersTotalPages = ref(1)
+const ordersTotal = ref(0)
 const ordersLoading = ref(false)
 
 // Payments
 const paymentOrders = ref([])
 const paymentsPage = ref(1)
 const paymentsTotalPages = ref(1)
+const paymentsTotal = ref(0)
 const paymentsLoading = ref(false)
 
 // Detail modal
@@ -37,7 +39,34 @@ const orderDetailLoading = ref(false)
 const abnormalOrders = ref([])
 const abnormalPage = ref(1)
 const abnormalTotalPages = ref(1)
+const abnormalTotal = ref(0)
 const abnormalLoading = ref(false)
+
+const pageSize = ref(20)
+const today = new Date()
+const dateInput = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const startDate = ref(dateInput(today))
+const endDate = ref(dateInput(today))
+
+const getDateParams = () => {
+  const start = new Date(`${startDate.value}T00:00:00`)
+  const end = new Date(`${endDate.value}T00:00:00`)
+  end.setDate(end.getDate() + 1)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return null
+  return { start_at: start.toISOString(), end_at: end.toISOString() }
+}
+
+const getListParams = (page, type) => ({
+  ...(type ? { type } : {}),
+  page,
+  pageSize: pageSize.value,
+  ...(getDateParams() || {})
+})
 
 const fetchDashboard = async () => {
   try {
@@ -60,12 +89,13 @@ const fetchDashboard = async () => {
 const fetchOrders = async (page = 1) => {
   ordersLoading.value = true
   try {
-    const res = await getOrders({ page, limit: 15 }).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
+    const res = await getOrders(getListParams(page)).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
       const json = await res.json()
       allOrders.value = json.data
       ordersPage.value = json.page
-      ordersTotalPages.value = json.total_pages
+      ordersTotalPages.value = json.totalPages ?? json.total_pages ?? 1
+      ordersTotal.value = json.total || 0
     }
   } catch (e) {
     console.error(e)
@@ -77,12 +107,13 @@ const fetchOrders = async (page = 1) => {
 const fetchPayments = async (page = 1) => {
   paymentsLoading.value = true
   try {
-    const res = await getOrders({ type: 'payment', page, limit: 15 }).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
+    const res = await getOrders(getListParams(page, 'payment')).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
       const json = await res.json()
       paymentOrders.value = json.data
       paymentsPage.value = json.page
-      paymentsTotalPages.value = json.total_pages
+      paymentsTotalPages.value = json.totalPages ?? json.total_pages ?? 1
+      paymentsTotal.value = json.total || 0
     }
   } catch (e) {
     console.error(e)
@@ -94,12 +125,13 @@ const fetchPayments = async (page = 1) => {
 const fetchAbnormal = async (page = 1) => {
   abnormalLoading.value = true
   try {
-    const res = await getOrders({ type: 'abnormal', page, limit: 15 }).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
+    const res = await getOrders(getListParams(page, 'abnormal')).then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
       const json = await res.json()
       abnormalOrders.value = json.data
       abnormalPage.value = json.page
-      abnormalTotalPages.value = json.total_pages
+      abnormalTotalPages.value = json.totalPages ?? json.total_pages ?? 1
+      abnormalTotal.value = json.total || 0
     }
   } catch (e) {
     console.error(e)
@@ -175,6 +207,24 @@ const loadData = () => {
   else if (currentTab.value === 'orders') fetchOrders(ordersPage.value)
   else if (currentTab.value === 'payments') fetchPayments(paymentsPage.value)
   else if (currentTab.value === 'abnormal') fetchAbnormal(abnormalPage.value)
+}
+
+const applyFilters = () => {
+  if (!getDateParams()) {
+    window.$toast('请选择有效的时间范围', 'warning')
+    return
+  }
+  ordersPage.value = 1
+  paymentsPage.value = 1
+  abnormalPage.value = 1
+  loadData()
+}
+
+const resetDateRange = () => {
+  const value = dateInput(new Date())
+  startDate.value = value
+  endDate.value = value
+  applyFilters()
 }
 
 watch(() => currentTab.value, loadData)
@@ -459,6 +509,13 @@ const pageSubtitle = computed(() => {
         <div class="card-header">
           <h3 class="card-title">所有订单明细</h3>
         </div>
+        <div class="report-filters">
+          <label>开始日期 <input v-model="startDate" type="date" @change="applyFilters" /></label>
+          <label>结束日期 <input v-model="endDate" type="date" @change="applyFilters" /></label>
+          <button class="btn btn-secondary" type="button" @click="resetDateRange">今天</button>
+          <label>每页 <select v-model.number="pageSize" @change="applyFilters"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label>
+          <span class="filter-total">共 {{ ordersTotal }} 条</span>
+        </div>
         <div class="table-container" :class="{ loading: ordersLoading }">
           <table class="data-table">
             <thead>
@@ -515,6 +572,13 @@ const pageSubtitle = computed(() => {
       <div class="recent-orders-card">
         <div class="card-header">
           <h3 class="card-title">三方支付明细对账</h3>
+        </div>
+        <div class="report-filters">
+          <label>开始日期 <input v-model="startDate" type="date" @change="applyFilters" /></label>
+          <label>结束日期 <input v-model="endDate" type="date" @change="applyFilters" /></label>
+          <button class="btn btn-secondary" type="button" @click="resetDateRange">今天</button>
+          <label>每页 <select v-model.number="pageSize" @change="applyFilters"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label>
+          <span class="filter-total">共 {{ paymentsTotal }} 条</span>
         </div>
         <div class="table-container" :class="{ loading: paymentsLoading }">
           <table class="data-table" style="min-width: 1000px">
@@ -575,6 +639,13 @@ const pageSubtitle = computed(() => {
       <div class="recent-orders-card">
         <div class="card-header">
           <h3 class="card-title">超时异常订单</h3>
+        </div>
+        <div class="report-filters">
+          <label>开始日期 <input v-model="startDate" type="date" @change="applyFilters" /></label>
+          <label>结束日期 <input v-model="endDate" type="date" @change="applyFilters" /></label>
+          <button class="btn btn-secondary" type="button" @click="resetDateRange">今天</button>
+          <label>每页 <select v-model.number="pageSize" @change="applyFilters"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label>
+          <span class="filter-total">共 {{ abnormalTotal }} 条</span>
         </div>
         <div class="table-container" :class="{ loading: abnormalLoading }">
           <table class="data-table">
@@ -1018,6 +1089,40 @@ const pageSubtitle = computed(() => {
   font-size: 13px;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.report-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.report-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.report-filters input,
+.report-filters select {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.filter-total {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .pagination {

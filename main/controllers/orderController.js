@@ -15,6 +15,13 @@ const dbAllAsync = (sql, params = []) => new Promise((resolve, reject) => {
   db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
 });
 
+const toSqliteUtc = (value) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
 exports.getTodayReport = (req, res) => {
   const today = new Date().toISOString().split('T')[0] + '%';
   const sql = `
@@ -40,11 +47,21 @@ exports.getTodayReport = (req, res) => {
 };
 
 exports.getOrders = (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = (page - 1) * limit;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const requestedPageSize = parseInt(req.query.pageSize ?? req.query.limit, 10) || 20;
+  const pageSize = Math.min(100, Math.max(1, requestedPageSize));
+  const offset = (page - 1) * pageSize;
   const filterType = req.query.type; 
   const searchId = req.query.id;
+  const startAt = req.query.start_at ? toSqliteUtc(req.query.start_at) : null;
+  const endAt = req.query.end_at ? toSqliteUtc(req.query.end_at) : null;
+
+  if ((req.query.start_at && !startAt) || (req.query.end_at && !endAt)) {
+    return res.status(400).json({ error: '时间范围格式无效' });
+  }
+  if (startAt && endAt && startAt >= endAt) {
+    return res.status(400).json({ error: '开始时间必须早于结束时间' });
+  }
   
   let where = '1=1';
   let params = [];
@@ -53,9 +70,18 @@ exports.getOrders = (req, res) => {
     where += ' AND id LIKE ?';
     params.push(`%${searchId}%`);
   }
+
+  if (startAt) {
+    where += ' AND created_at >= ?';
+    params.push(startAt);
+  }
+  if (endAt) {
+    where += ' AND created_at < ?';
+    params.push(endAt);
+  }
   
   if (filterType === 'payment') {
-    where += " AND pay_method IN ('wechat', 'alipay', 'unionpay')";
+    where += " AND pay_method IS NOT NULL AND pay_method != ''";
   } else if (filterType === 'abnormal') {
     where += " AND status = 'abnormal'";
   }
@@ -69,7 +95,7 @@ exports.getOrders = (req, res) => {
     const total = row.total;
     
     const sql = `SELECT * FROM orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    db.all(sql, [...params, limit, offset], (err, rows) => {
+    db.all(sql, [...params, pageSize, offset], (err, rows) => {
       if (err) {
         logger.error(`query orders list failed: ${err.message}`);
         return res.status(500).json({ error: err.message });
@@ -78,8 +104,10 @@ exports.getOrders = (req, res) => {
         data: rows,
         total,
         page,
-        limit,
-        total_pages: Math.ceil(total / limit)
+        pageSize,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize),
+        total_pages: Math.ceil(total / pageSize)
       });
     });
   });

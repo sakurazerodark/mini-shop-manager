@@ -1,6 +1,6 @@
 const logger = require('../logger');
 const { fetchJsonWithTimeout } = require('../utils/http');
-const { pickPaymentConfig } = require('./settingService');
+const { pickPaymentConfig, normalizePaymentPreferences } = require('./settingService');
 const { dbGet } = require('../database');
 const {
   alipayEncryptBizContent,
@@ -249,6 +249,7 @@ const sanitizePaymentConfig = (config) => {
     }
   };
   return {
+    payment_preferences: normalizePaymentPreferences(c.payment_preferences),
     wechatpay_v3: {
       mchid: c.wechatpay_v3?.mchid || '',
       appid: c.wechatpay_v3?.appid || '',

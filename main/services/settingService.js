@@ -1,5 +1,38 @@
 const { dbGet, dbRun, dbAll } = require('../database');
 
+const DEFAULT_PAYMENT_PREFERENCES = {
+  default_method: 'alipay',
+  methods: [
+    { id: 'alipay', category: 'customer_dynamic_qr', channel: 'alipay', name: '客户扫动态码', enabled: true, sort: 10 },
+    { id: 'alipay_scan', category: 'merchant_scan_customer', channel: 'alipay', name: '商家扫客户码', enabled: true, sort: 20 },
+    { id: 'personal_qrcode', category: 'merchant_static_qr', channel: null, name: '商家静态二维码', enabled: true, sort: 30 },
+    { id: 'cash', category: 'cash', channel: null, name: '现金支付', enabled: true, sort: 40 },
+    { id: 'other', category: 'other', channel: null, name: '其他方式', enabled: true, sort: 50 }
+  ]
+};
+
+const normalizePaymentPreferences = (input = {}) => {
+  const source = input && typeof input === 'object' ? input : {};
+  const incoming = new Map((Array.isArray(source.methods) ? source.methods : []).map((method) => [String(method?.id || ''), method]));
+  const methods = DEFAULT_PAYMENT_PREFERENCES.methods.map((base, index) => {
+    const method = incoming.get(base.id) || {};
+    const sort = Number(method.sort);
+    return {
+      ...base,
+      name: typeof method.name === 'string' && method.name.trim() ? method.name.trim() : base.name,
+      enabled: method.enabled === undefined ? base.enabled : Boolean(method.enabled),
+      sort: Number.isFinite(sort) ? sort : (index + 1) * 10
+    };
+  }).sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id));
+
+  methods.forEach((method, index) => { method.sort = (index + 1) * 10; });
+  const requestedDefault = String(source.default_method || '').trim();
+  const defaultMethod = methods.some((method) => method.id === requestedDefault && method.enabled)
+    ? requestedDefault
+    : (methods.find((method) => method.enabled)?.id || methods[0].id);
+  return { default_method: defaultMethod, methods };
+};
+
 const getSetting = async (key, fallback = null) => {
   const row = await dbGet("SELECT value FROM settings WHERE key = ?", [key]).catch(() => null);
   return row?.value ?? fallback;
@@ -22,6 +55,11 @@ const getPaymentConfigRaw = async () => {
   }
 };
 
+const getPaymentPreferences = async (config = null) => {
+  const paymentConfig = config || await getPaymentConfigRaw();
+  return normalizePaymentPreferences(paymentConfig?.payment_preferences);
+};
+
 const pickPaymentConfig = async () => {
   const cfg = await getPaymentConfigRaw();
   return cfg || {};
@@ -32,5 +70,7 @@ module.exports = {
   setSetting,
   getCostingMode,
   getPaymentConfigRaw,
+  getPaymentPreferences,
+  normalizePaymentPreferences,
   pickPaymentConfig
 };
