@@ -8,9 +8,9 @@ import { queryAlipay, precreateAlipay, payAlipay } from '../api/payments'
 const barcodeInput = ref('')
 const barcodeInputRef = ref(null)
 const cart = ref([])
-const paymentMethod = ref('alipay')
+const paymentMethod = ref('customer_dynamic_qr')
 const paymentConfig = ref(null)
-const paymentPreferences = ref({ default_method: 'alipay', methods: [] })
+const paymentPreferences = ref({ default_method: 'customer_dynamic_qr', methods: [] })
 const scanMode = ref('product')
 
 // 结账成功动画状态
@@ -160,12 +160,21 @@ const fetchPaymentConfig = async () => {
   }
 }
 
+const getPaymentPreference = (method) => paymentPreferences.value?.methods?.find(item => item.id === method)
+const getPaymentChannel = (method) => getPaymentPreference(method)?.channel || null
+const paymentChannelName = (channel) => ({ alipay: '支付宝', wechat: '微信支付', unionpay: '云闪付' }[channel] || channel || '未选择渠道')
+
 const isPaymentEnabled = (method) => {
-  const preference = paymentPreferences.value?.methods?.find(item => item.id === method)
+  const preference = getPaymentPreference(method)
   if (preference && !preference.enabled) return false
   if (method === 'cash' || method === 'personal_qrcode' || method === 'other') return true
-  if (method === 'wechat') return false // 开发中
-  if (method === 'unionpay') return false // 开发中
+  const channel = getPaymentChannel(method)
+  if (method === 'customer_dynamic_qr' || method === 'merchant_scan_customer') {
+    if (channel !== 'alipay') return false
+    const a = paymentConfig.value?.alipay_f2f
+    return Boolean(a?.app_id && a?.gateway && a?.merchant_private_key_set && a?.alipay_public_key_set)
+  }
+  if (method === 'wechat' || method === 'unionpay') return false
 
   if (!paymentConfig.value) return false
 
@@ -197,7 +206,7 @@ const normalizePaymentMethod = () => {
     .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0))
     .map(item => item.id)
     .filter(item => isPaymentEnabled(item)) || []
-  const ordered = [paymentPreferences.value?.default_method, ...preferred, 'alipay', 'cash', 'other']
+  const ordered = [paymentPreferences.value?.default_method, ...preferred, 'customer_dynamic_qr', 'merchant_scan_customer', 'cash', 'other']
   const next = ordered.find(m => isPaymentEnabled(m)) || 'cash'
   paymentMethod.value = next
 }
@@ -218,6 +227,7 @@ const buildOrderData = () => {
     order_id: 'ORD' + Date.now(),
     total_amount: totalAmount.value,
     pay_method: paymentMethod.value,
+    pay_provider: getPaymentChannel(paymentMethod.value),
     items: cart.value.map(item => ({
       product_id: item.id,
       quantity: item.quantity,
@@ -381,6 +391,7 @@ const finalizeOrder = async () => {
       amount: Number(pendingOrder.value.total_amount || 0).toFixed(2),
       items: pendingOrder.value.items.reduce((t, it) => t + Number(it.quantity || 0), 0),
       payMethod: paymentMethod.value,
+      payChannel: getPaymentChannel(paymentMethod.value),
       confirmedVia
     }
     showSuccessOverlay.value = true
@@ -407,11 +418,11 @@ const finalizeOrder = async () => {
 
 const openPayOverlay = async () => {
   showPayOverlay.value = true
-  scanMode.value = paymentMethod.value === 'alipay_scan' ? 'payment' : 'product'
+  scanMode.value = paymentMethod.value === 'merchant_scan_customer' ? 'payment' : 'product'
   scanPayCode.value = ''
   alipayQrCode.value = ''
   await nextTick()
-  if (paymentMethod.value === 'alipay') {
+  if (paymentMethod.value === 'customer_dynamic_qr' && getPaymentChannel(paymentMethod.value) === 'alipay') {
     createAlipayQr()
   }
 }
@@ -548,7 +559,7 @@ const handleGlobalKeydown = (e) => {
       }
 
       // 如果当前在支付弹窗且选择了支付宝，拦截为“扫码付款”
-      if (showPayOverlay.value && scanMode.value === 'payment' && paymentMethod.value === 'alipay_scan') {
+      if (showPayOverlay.value && scanMode.value === 'payment' && paymentMethod.value === 'merchant_scan_customer' && getPaymentChannel(paymentMethod.value) === 'alipay') {
         scanPayCode.value = barcodeBuffer
         submitAlipayScanPay()
       } else if (scanMode.value === 'product' && !showPayOverlay.value) {
@@ -689,21 +700,21 @@ onUnmounted(() => {
       <div class="payment-card">
         <h3 class="card-title">收款方式</h3>
         <div class="pay-methods">
-          <label :class="['pay-method', { active: paymentMethod === 'alipay', disabled: !isPaymentEnabled('alipay') }]" :style="{ order: paymentOrder('alipay') }">
-            <input type="radio" v-model="paymentMethod" value="alipay" class="hidden-radio" :disabled="!isPaymentEnabled('alipay')" />
+          <label :class="['pay-method', { active: paymentMethod === 'customer_dynamic_qr', disabled: !isPaymentEnabled('customer_dynamic_qr') }]" :style="{ order: paymentOrder('customer_dynamic_qr') }">
+            <input type="radio" v-model="paymentMethod" value="customer_dynamic_qr" class="hidden-radio" :disabled="!isPaymentEnabled('customer_dynamic_qr')" />
             <div class="pay-icon alipay">
               <svg class="icon" viewBox="0 0 1024 1024" width="28" height="28" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M902.095 652.871l-250.96-84.392s19.287-28.87 39.874-85.472c20.59-56.606 23.539-87.689 23.539-87.689l-162.454-1.339v-55.487l196.739-1.387v-39.227H552.055v-89.29h-96.358v89.294H272.133v39.227l183.564-1.304v59.513h-147.24v31.079h303.064s-3.337 25.223-14.955 56.606c-11.615 31.38-23.58 58.862-23.58 58.862s-142.3-49.804-217.285-49.804c-74.985 0-166.182 30.123-175.024 117.55-8.8 87.383 42.481 134.716 114.728 152.139 72.256 17.513 138.962-0.173 197.04-28.607 58.087-28.391 115.081-92.933 115.081-92.933l292.486 142.041c-11.932 69.3-72.067 119.914-142.387 119.844H266.37c-79.714 0.078-144.392-64.483-144.466-144.194V266.374c-0.074-79.72 64.493-144.399 144.205-144.47h491.519c79.714-0.073 144.396 64.49 144.466 144.203v386.764z m-365.76-48.895s-91.302 115.262-198.879 115.262c-107.623 0-130.218-54.767-130.218-94.155 0-39.34 22.373-82.144 113.943-88.333 91.519-6.18 215.2 67.226 215.2 67.226h-0.047z" fill="#02A9F1"></path></svg>
             </div>
-            <span class="pay-name">客户扫动态码</span>
-            <div class="pay-badge" v-if="!isPaymentEnabled('alipay')">未配置</div>
-            <div class="check-icon" v-if="paymentMethod === 'alipay' && isPaymentEnabled('alipay')">✓</div>
+            <span class="pay-name">客户扫动态码 <small>({{ paymentChannelName(getPaymentChannel('customer_dynamic_qr')) }})</small></span>
+            <div class="pay-badge" v-if="!isPaymentEnabled('customer_dynamic_qr')">渠道未配置</div>
+            <div class="check-icon" v-if="paymentMethod === 'customer_dynamic_qr' && isPaymentEnabled('customer_dynamic_qr')">✓</div>
           </label>
-          <label class="pay-method" :class="{ active: paymentMethod === 'alipay_scan', disabled: !isPaymentEnabled('alipay_scan') }" :style="{ order: paymentOrder('alipay_scan') }">
-            <input type="radio" v-model="paymentMethod" value="alipay_scan" class="hidden-radio" :disabled="!isPaymentEnabled('alipay_scan')" />
+          <label class="pay-method" :class="{ active: paymentMethod === 'merchant_scan_customer', disabled: !isPaymentEnabled('merchant_scan_customer') }" :style="{ order: paymentOrder('merchant_scan_customer') }">
+            <input type="radio" v-model="paymentMethod" value="merchant_scan_customer" class="hidden-radio" :disabled="!isPaymentEnabled('merchant_scan_customer')" />
             <div class="pay-icon alipay">⌁</div>
-            <span class="pay-name">商家扫客户码</span>
-            <div class="pay-badge" v-if="!isPaymentEnabled('alipay_scan')">未配置</div>
-            <div class="check-icon" v-if="paymentMethod === 'alipay_scan' && isPaymentEnabled('alipay_scan')">✓</div>
+            <span class="pay-name">商家扫客户码 <small>({{ paymentChannelName(getPaymentChannel('merchant_scan_customer')) }})</small></span>
+            <div class="pay-badge" v-if="!isPaymentEnabled('merchant_scan_customer')">渠道未配置</div>
+            <div class="check-icon" v-if="paymentMethod === 'merchant_scan_customer' && isPaymentEnabled('merchant_scan_customer')">✓</div>
           </label>
           <label :class="['pay-method', { active: paymentMethod === 'wechat', disabled: true }]" :style="{ order: paymentOrder('wechat') }">
             <input type="radio" v-model="paymentMethod" value="wechat" class="hidden-radio" disabled />
@@ -794,7 +805,8 @@ onUnmounted(() => {
           <div class="receipt-row">
             <span class="r-label">支付方式</span>
             <span class="r-value method">
-              {{ successData.payMethod === 'wechat' ? '微信支付' : successData.payMethod === 'alipay' ? '客户扫动态码' : successData.payMethod === 'alipay_scan' ? '商家扫客户码' : successData.payMethod === 'unionpay' ? '云闪付' : successData.payMethod === 'personal_qrcode' ? '商家静态二维码' : successData.payMethod === 'other' ? '其他方式' : '现金支付' }}
+              {{ successData.payMethod === 'customer_dynamic_qr' ? '客户扫动态码' : successData.payMethod === 'merchant_scan_customer' ? '商家扫客户码' : successData.payMethod === 'personal_qrcode' ? '商家静态二维码' : successData.payMethod === 'other' ? '其他方式' : successData.payMethod === 'cash' ? '现金支付' : successData.payMethod }}
+              <span v-if="successData.payChannel">（{{ paymentChannelName(successData.payChannel) }}）</span>
             </span>
           </div>
           <div class="receipt-row" v-if="successData.confirmedVia">
@@ -867,14 +879,14 @@ onUnmounted(() => {
           </div>
 
           <div class="pay-method-hint">
-            <span class="tag">{{ paymentMethod === 'wechat' ? '微信支付' : paymentMethod === 'alipay' ? '客户扫动态码' : paymentMethod === 'alipay_scan' ? '商家扫客户码' : paymentMethod === 'personal_qrcode' ? '商家静态二维码' : paymentMethod === 'cash' ? '现金支付' : '其他方式' }}</span>
-            <span class="text-muted" v-if="paymentMethod === 'alipay_scan'">请使用扫码枪扫描顾客付款码，扫码输入仅用于支付</span>
-            <span class="text-muted" v-else-if="paymentMethod !== 'alipay'">暂未接入真实支付接口，将以手动确认模拟流程</span>
+            <span class="tag">{{ paymentMethod === 'customer_dynamic_qr' ? '客户扫动态码' : paymentMethod === 'merchant_scan_customer' ? '商家扫客户码' : paymentMethod === 'personal_qrcode' ? '商家静态二维码' : paymentMethod === 'cash' ? '现金支付' : '其他方式' }} · {{ paymentChannelName(getPaymentChannel(paymentMethod)) }}</span>
+            <span class="text-muted" v-if="paymentMethod === 'merchant_scan_customer'">请使用扫码枪扫描顾客付款码，扫码输入仅用于支付</span>
+            <span class="text-muted" v-else-if="paymentMethod !== 'customer_dynamic_qr'">暂未接入真实支付接口，将以手动确认模拟流程</span>
             <span class="text-muted" v-else>{{ isPayPolling ? '轮询中：等待支付结果...' : '准备收款：请顾客扫描下方动态二维码' }}</span>
           </div>
 
           <div class="pay-panel">
-            <div v-if="paymentMethod === 'alipay'" class="qr-wrap">
+            <div v-if="paymentMethod === 'customer_dynamic_qr' && getPaymentChannel(paymentMethod) === 'alipay'" class="qr-wrap">
               <div v-if="alipayQrImg" class="qr-card">
                 <img :src="alipayQrImg" alt="支付宝收款码" class="qr-img" />
                 <div class="qr-meta">
@@ -895,7 +907,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div v-else-if="paymentMethod === 'alipay_scan'" class="panel-box">
+            <div v-else-if="paymentMethod === 'merchant_scan_customer'" class="panel-box">
               <div class="panel-icon">⌁</div>
               <div class="panel-desc">等待扫码枪输入顾客付款码</div>
             </div>
@@ -908,7 +920,7 @@ onUnmounted(() => {
 
         <div class="pay-footer">
           <button class="btn btn-secondary" @click="cancelPayOverlay">取消</button>
-          <button v-if="paymentMethod !== 'alipay' && paymentMethod !== 'alipay_scan'" class="btn btn-primary" @click="finalizeOrder" :disabled="isFinalizing">
+          <button v-if="paymentMethod !== 'customer_dynamic_qr' && paymentMethod !== 'merchant_scan_customer'" class="btn btn-primary" @click="finalizeOrder" :disabled="isFinalizing">
             {{ isFinalizing ? '处理中...' : '确认已收款' }}
           </button>
           <button v-else class="btn btn-primary" @click="pollAlipayStatus" :disabled="isPayCreating || isFinalizing">

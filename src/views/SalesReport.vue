@@ -235,9 +235,19 @@ const formatMethod = (method) => {
     'wechat': '微信支付',
     'alipay': '支付宝',
     'unionpay': '云闪付',
-    'cash': '现金收款'
+    'cash': '现金收款',
+    'customer_dynamic_qr': '客户扫动态码',
+    'merchant_scan_customer': '商家扫客户码',
+    'personal_qrcode': '商家静态二维码',
+    'other': '其他方式'
   }
   return map[method] || method
+}
+
+const formatPaymentLabel = (order) => {
+  const method = formatMethod(order?.pay_method)
+  const channel = { alipay: '支付宝', wechat: '微信支付', wechatpay: '微信支付', unionpay: '云闪付' }[order?.pay_provider]
+  return channel && ['客户扫动态码', '商家扫客户码'].includes(method) ? `${method}（${channel}）` : method
 }
 
 const formatConfirmedVia = (via) => {
@@ -472,7 +482,7 @@ const pageSubtitle = computed(() => {
                     <span class="icon" v-else-if="order.pay_method==='alipay'">💳</span>
                     <span class="icon" v-else-if="order.pay_method==='unionpay'">🏦</span>
                     <span class="icon" v-else>💵</span>
-                    {{ formatMethod(order.pay_method) }}
+                    {{ formatPaymentLabel(order) }}
                   </div>
                 </td>
                 <td class="source-cell">{{ formatConfirmedVia(order.pay_confirmed_via) }}</td>
@@ -536,7 +546,7 @@ const pageSubtitle = computed(() => {
                 <td class="order-amount">¥ {{ order.total_amount.toFixed(2) }}</td>
                 <td>
                   <div :class="['pay-tag', order.pay_method]">
-                    {{ formatMethod(order.pay_method) }}
+                    {{ formatPaymentLabel(order) }}
                   </div>
                 </td>
                 <td class="source-cell">{{ formatConfirmedVia(order.pay_confirmed_via) }}</td>
@@ -667,7 +677,7 @@ const pageSubtitle = computed(() => {
                 <td class="order-amount">¥ {{ order.total_amount.toFixed(2) }}</td>
                 <td>
                   <div :class="['pay-tag', order.pay_method]">
-                    {{ formatMethod(order.pay_method) }}
+                    {{ formatPaymentLabel(order) }}
                   </div>
                 </td>
                 <td>
@@ -723,7 +733,7 @@ const pageSubtitle = computed(() => {
               </div>
               <div class="meta-row">
                 <span class="meta-label">支付方式</span>
-                <span class="meta-value">{{ formatMethod(orderDetail.order.pay_method) }}</span>
+                <span class="meta-value">{{ formatPaymentLabel(orderDetail.order) }}</span>
               </div>
               <div class="meta-row">
                 <span class="meta-label">来源</span>

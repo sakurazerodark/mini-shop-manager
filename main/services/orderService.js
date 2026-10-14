@@ -2,10 +2,10 @@ const { dbGet, dbRun, dbAll } = require('../database');
 const { getCostingMode } = require('./settingService');
 const { consumeBatchesFIFO, recalcAvgCostFromBatches } = require('./productService');
 
-const createPendingOrder = async ({ orderId, totalAmount, payMethod, items }) => {
+const createPendingOrder = async ({ orderId, totalAmount, payMethod, payProvider, items }) => {
   await dbRun("BEGIN TRANSACTION");
   try {
-    await dbRun("INSERT INTO orders (id, total_amount, pay_method, status, pay_status) VALUES (?, ?, ?, 'pending', 'created')", [orderId, totalAmount, payMethod]);
+    await dbRun("INSERT INTO orders (id, total_amount, pay_method, pay_provider, status, pay_status) VALUES (?, ?, ?, ?, 'pending', 'created')", [orderId, totalAmount, payMethod, payProvider || null]);
     for (const item of items || []) {
       const qty = Number(item.quantity || 0);
       const unitPrice = Number(item.unit_price || 0);

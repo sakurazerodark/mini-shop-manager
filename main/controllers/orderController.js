@@ -164,10 +164,10 @@ exports.getOrderById = async (req, res) => {
 };
 
 exports.createPendingOrder = async (req, res) => {
-  const { order_id, items, total_amount, pay_method } = req.body || {};
+  const { order_id, items, total_amount, pay_method, pay_provider } = req.body || {};
   if (!order_id) return res.status(400).json({ error: '缺少 order_id' });
   try {
-    await orderService.createPendingOrder({ orderId: order_id, totalAmount: total_amount, payMethod: pay_method, items });
+    await orderService.createPendingOrder({ orderId: order_id, totalAmount: total_amount, payMethod: pay_method, payProvider: pay_provider, items });
     res.json({ message: '已创建待支付订单', order_id });
   } catch (e) {
     res.status(500).json({ error: e.message });

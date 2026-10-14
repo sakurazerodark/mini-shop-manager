@@ -5,7 +5,7 @@ import { lookupBarcode } from '../api/products'
 import { globalStoreName } from '../store'
 
 const currentTab = ref('basic') // 'basic', 'payment'
-const paymentTab = ref('alipay')
+const paymentTab = ref('general')
 
 const storeName = ref('店小易')
 const isSavingBasic = ref(false)
@@ -100,7 +100,7 @@ const fetchPaymentSettings = async () => {
     if (!res.ok) return
     const json = await res.json()
     paymentStatus.value = json?.data || null
-    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'alipay', methods: [] }
+    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'customer_dynamic_qr', methods: [] }
     pollIntervalSec.value = Math.max(1, Math.floor(Number(paymentStatus.value?.poll_interval_ms || 2000) / 1000))
     payment.value.wechatpay_v3.mchid = paymentStatus.value?.wechatpay_v3?.mchid || ''
     payment.value.wechatpay_v3.appid = paymentStatus.value?.wechatpay_v3?.appid || ''
@@ -538,10 +538,10 @@ onMounted(() => {
     <!-- 支付设置 -->
     <div v-if="currentTab === 'payment'">
       <div class="subtabs-nav">
+        <button :class="['subtab-btn', { active: paymentTab === 'general' }]" @click="paymentTab = 'general'">通用配置</button>
         <button :class="['subtab-btn', { active: paymentTab === 'alipay' }]" @click="paymentTab = 'alipay'">支付宝</button>
         <button :class="['subtab-btn', { active: paymentTab === 'wechat' }]" @click="paymentTab = 'wechat'">微信支付 (开发中)</button>
         <button :class="['subtab-btn', { active: paymentTab === 'unionpay' }]" @click="paymentTab = 'unionpay'">云闪付 (开发中)</button>
-        <button :class="['subtab-btn', { active: paymentTab === 'general' }]" @click="paymentTab = 'general'">通用</button>
       </div>
 
       <div class="grid" v-if="paymentTab === 'wechat'">
@@ -713,7 +713,7 @@ onMounted(() => {
       <div class="grid" v-else>
         <section class="card">
           <div class="card-head">
-            <div class="card-title">通用设置</div>
+            <div class="card-title">通用配置</div>
           </div>
           <div class="form">
             <div class="form-group">
@@ -724,6 +724,9 @@ onMounted(() => {
                     <input type="checkbox" v-model="method.enabled" @change="method.enabled || (paymentPreferences.default_method === method.id ? paymentPreferences.default_method = paymentPreferences.methods.find(item => item.enabled)?.id || '' : null)" />
                     <span>{{ method.name }}</span>
                     <small>{{ method.category }}</small>
+                    <select v-if="method.channels?.length" v-model="method.channel" class="channel-select" aria-label="线上支付渠道">
+                      <option v-for="channel in method.channels" :key="channel" :value="channel">{{ channel === 'alipay' ? '支付宝' : channel === 'wechat' ? '微信支付' : '云闪付' }}</option>
+                    </select>
                   </div>
                   <div class="payment-preference-actions">
                     <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="movePaymentMethod(index, -1)" title="上移">上移</button>
@@ -815,6 +818,16 @@ onMounted(() => {
 .payment-preference-main small {
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.channel-select {
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
 }
 
 .payment-preference-actions .btn {
