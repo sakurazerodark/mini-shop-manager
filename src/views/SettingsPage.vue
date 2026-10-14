@@ -100,7 +100,7 @@ const fetchPaymentSettings = async () => {
     if (!res.ok) return
     const json = await res.json()
     paymentStatus.value = json?.data || null
-    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'customer_dynamic_qr', methods: [] }
+    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'alipay_dynamic_qr', methods: [] }
     pollIntervalSec.value = Math.max(1, Math.floor(Number(paymentStatus.value?.poll_interval_ms || 2000) / 1000))
     payment.value.wechatpay_v3.mchid = paymentStatus.value?.wechatpay_v3?.mchid || ''
     payment.value.wechatpay_v3.appid = paymentStatus.value?.wechatpay_v3?.appid || ''
@@ -724,9 +724,10 @@ onMounted(() => {
                     <input type="checkbox" v-model="method.enabled" @change="method.enabled || (paymentPreferences.default_method === method.id ? paymentPreferences.default_method = paymentPreferences.methods.find(item => item.enabled)?.id || '' : null)" />
                     <span>{{ method.name }}</span>
                     <small>{{ method.category }}</small>
-                    <select v-if="method.channels?.length" v-model="method.channel" class="channel-select" aria-label="线上支付渠道">
+                    <select v-if="method.channels?.length && method.channel !== 'auto'" v-model="method.channel" class="channel-select" aria-label="线上支付渠道">
                       <option v-for="channel in method.channels" :key="channel" :value="channel">{{ channel === 'alipay' ? '支付宝' : channel === 'wechat' ? '微信支付' : '云闪付' }}</option>
                     </select>
+                    <small v-else-if="method.channel === 'auto'" class="auto-channel">自动识别支付宝/微信支付/云闪付</small>
                   </div>
                   <div class="payment-preference-actions">
                     <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="movePaymentMethod(index, -1)" title="上移">上移</button>
@@ -817,6 +818,11 @@ onMounted(() => {
 
 .payment-preference-main small {
   color: var(--text-muted);
+  font-size: 11px;
+}
+
+.payment-preference-main .auto-channel {
+  color: #2563eb;
   font-size: 11px;
 }
 

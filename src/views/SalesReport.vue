@@ -237,6 +237,9 @@ const formatMethod = (method) => {
     'unionpay': '云闪付',
     'cash': '现金收款',
     'customer_dynamic_qr': '客户扫动态码',
+    'alipay_dynamic_qr': '支付宝客户扫动态码',
+    'wechat_dynamic_qr': '微信支付客户扫动态码',
+    'unionpay_dynamic_qr': '云闪付客户扫动态码',
     'merchant_scan_customer': '商家扫客户码',
     'personal_qrcode': '商家静态二维码',
     'other': '其他方式'
@@ -247,7 +250,7 @@ const formatMethod = (method) => {
 const formatPaymentLabel = (order) => {
   const method = formatMethod(order?.pay_method)
   const channel = { alipay: '支付宝', wechat: '微信支付', wechatpay: '微信支付', unionpay: '云闪付' }[order?.pay_provider]
-  return channel && ['客户扫动态码', '商家扫客户码'].includes(method) ? `${method}（${channel}）` : method
+  return channel && method === '商家扫客户码' ? `${method}（${channel}）` : method
 }
 
 const formatConfirmedVia = (via) => {
