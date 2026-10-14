@@ -3,12 +3,16 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Toast from './components/Toast.vue'
 import { getBasicSettings } from './api/settings'
-import { globalStoreName as storeName } from './store'
+import { login, getCurrentUser, logout } from './api/auth'
+import { authState, clearAuthSession, globalStoreName as storeName, hasPermission } from './store'
 
 const route = useRoute()
 const router = useRouter()
 
 const isSidebarCollapsed = ref(false)
+const showLogin = ref(false)
+const loginForm = ref({ username: '', password: '' })
+const loginError = ref('')
 
 const fetchStoreName = async () => {
   try {
@@ -25,8 +29,45 @@ const fetchStoreName = async () => {
 }
 
 onMounted(() => {
+  if (!authState.token) {
+    authState.initialized = true
+    showLogin.value = true
+  }
   fetchStoreName()
+  if (authState.token) {
+    getCurrentUser().catch(() => { authState.initialized = true })
+  }
+  window.addEventListener('auth:error', handleAuthError)
 })
+onUnmounted(() => window.removeEventListener('auth:error', handleAuthError))
+
+const handleAuthError = (event) => {
+  const status = event?.detail?.status
+  if (status === 401) {
+    clearAuthSession()
+    authState.sessionExpired = true
+    showLogin.value = true
+    loginError.value = '登录状态已失效，请重新登录'
+  } else if (status === 403) {
+    window.$toast?.('当前账号没有执行此操作的权限', 'error')
+  }
+}
+
+const submitLogin = async () => {
+  loginError.value = ''
+  try {
+    await login(loginForm.value)
+    showLogin.value = false
+    window.$toast?.('登录成功', 'success')
+  } catch (error) {
+    loginError.value = error?.error || error?.message || '登录失败，请检查账号和密码'
+  }
+}
+
+const handleLogout = async () => {
+  await logout()
+  window.$toast?.('已退出登录', 'success')
+}
 const isMobileNavOpen = ref(false)
 const expandReport = ref(false)
 
@@ -46,8 +87,17 @@ const currentTitle = computed(() => {
   if (route.path === '/inventory') return '商品与库存'
   if (route.path === '/report') return '销售报表'
   if (route.path === '/settings') return '系统设置'
+  if (route.path === '/access-control') return '用户与权限'
   return storeName.value
 })
+
+const canSeeAccessControl = computed(() => hasPermission('account.view') || hasPermission('role.view'))
+const canUsePos = computed(() => hasPermission('payment.create'))
+const canManageInventory = computed(() => hasPermission('order.manage'))
+const canViewReports = computed(() => hasPermission('report.view'))
+const canViewSettings = computed(() => hasPermission('account.view') || hasPermission('payment.config.view'))
+const displayUserName = computed(() => authState.user?.display_name || authState.user?.name || authState.user?.username || '未登录')
+const displayRoleName = computed(() => authState.user?.role?.name || authState.user?.role_name || (authState.user ? '已登录' : '访客'))
 
 const setView = (path) => {
   router.push(path)
@@ -78,7 +128,7 @@ const setView = (path) => {
         <span class="logo-text" v-show="!isSidebarCollapsed">{{ storeName }}</span>
       </div>
       <nav class="nav-menu">
-        <a 
+        <a v-if="canUsePos"
           href="#" 
           :class="['nav-item', { active: route.path === '/' }]" 
           @click.prevent="setView('/')"
@@ -87,7 +137,7 @@ const setView = (path) => {
           <span class="nav-icon">🛒</span>
           <span class="nav-text" v-show="!isSidebarCollapsed">收银台</span>
         </a>
-        <a 
+        <a v-if="canManageInventory"
           href="#" 
           :class="['nav-item', { active: route.path === '/inventory' }]" 
           @click.prevent="setView('/inventory')"
@@ -96,7 +146,7 @@ const setView = (path) => {
           <span class="nav-icon">📦</span>
           <span class="nav-text" v-show="!isSidebarCollapsed">商品与库存</span>
         </a>
-        <a 
+        <a v-if="hasPermission('order.view')"
           href="#" 
           :class="['nav-item', { active: route.path === '/stock-logs' }]" 
           @click.prevent="setView('/stock-logs')"
@@ -105,7 +155,7 @@ const setView = (path) => {
           <span class="nav-icon">📈</span>
           <span class="nav-text" v-show="!isSidebarCollapsed">库存变动</span>
         </a>
-        <div class="nav-item-group" :class="{ 'is-expanded': expandReport && !isSidebarCollapsed }">
+        <div v-if="canViewReports" class="nav-item-group" :class="{ 'is-expanded': expandReport && !isSidebarCollapsed }">
           <a 
             href="#" 
             :class="['nav-item', { active: route.path === '/report' }]" 
@@ -132,7 +182,7 @@ const setView = (path) => {
           </div>
         </div>
         <div class="nav-divider"></div>
-        <a 
+        <a v-if="canViewSettings"
           href="#" 
           :class="['nav-item', { active: route.path === '/settings' }]" 
           @click.prevent="setView('/settings')"
@@ -140,6 +190,16 @@ const setView = (path) => {
         >
           <span class="nav-icon">⚙️</span>
           <span class="nav-text" v-show="!isSidebarCollapsed">系统设置</span>
+        </a>
+        <a
+          v-if="canSeeAccessControl"
+          href="#"
+          :class="['nav-item', { active: route.path === '/access-control' }]"
+          @click.prevent="setView('/access-control')"
+          :title="isSidebarCollapsed ? '用户与权限' : ''"
+        >
+          <span class="nav-icon">👥</span>
+          <span class="nav-text" v-show="!isSidebarCollapsed">用户与权限</span>
         </a>
       </nav>
       
@@ -152,12 +212,16 @@ const setView = (path) => {
         <div class="user-profile" v-show="!isSidebarCollapsed">
           <div class="avatar">👨‍💼</div>
           <div class="info">
-            <div class="name">店长 (Admin)</div>
-            <div class="status">● 在线</div>
+            <div class="name">{{ displayUserName }}</div>
+            <div class="status">● {{ displayRoleName }}</div>
+          </div>
+          <div class="profile-actions">
+            <button v-if="!authState.user" class="profile-btn" @click="showLogin = true">登录</button>
+            <button v-else class="profile-btn" @click="handleLogout">退出</button>
           </div>
         </div>
         <div class="user-profile collapsed" v-show="isSidebarCollapsed">
-          <div class="avatar" title="店长 (Admin)">👨‍💼</div>
+          <div class="avatar" :title="displayUserName">👨‍💼</div>
         </div>
       </div>
     </aside>
@@ -168,15 +232,15 @@ const setView = (path) => {
     </main>
 
     <div class="mobile-tabbar" role="navigation" aria-label="底部导航">
-      <button class="tab-item" :class="{ active: route.path === '/' }" @click="setView('/')">
+      <button v-if="canUsePos" class="tab-item" :class="{ active: route.path === '/' }" @click="setView('/')">
         <span class="tab-icon">🛒</span>
         <span class="tab-text">收银</span>
       </button>
-      <button class="tab-item" :class="{ active: route.path === '/inventory' }" @click="setView('/inventory')">
+      <button v-if="canManageInventory" class="tab-item" :class="{ active: route.path === '/inventory' }" @click="setView('/inventory')">
         <span class="tab-icon">📦</span>
         <span class="tab-text">库存</span>
       </button>
-      <button class="tab-item" :class="{ active: route.path === '/report' }" @click="setView('/report?tab=dashboard')">
+      <button v-if="canViewReports" class="tab-item" :class="{ active: route.path === '/report' }" @click="setView('/report?tab=dashboard')">
         <span class="tab-icon">📊</span>
         <span class="tab-text">报表</span>
       </button>
@@ -184,6 +248,16 @@ const setView = (path) => {
 
     <!-- 全局提示组件 -->
     <Toast />
+
+    <div v-if="showLogin" class="login-backdrop" @click.self="showLogin = false">
+      <form class="login-modal" @submit.prevent="submitLogin">
+        <div class="login-head"><div><p class="login-eyebrow">MiniShop</p><h2>登录管理后台</h2></div><button type="button" class="login-close" @click="showLogin = false">×</button></div>
+        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <label>账号<input v-model="loginForm.username" class="form-input" autocomplete="username" required /></label>
+        <label>密码<input v-model="loginForm.password" class="form-input" type="password" autocomplete="current-password" required /></label>
+        <button class="btn btn-primary login-submit" :disabled="authState.loading">{{ authState.loading ? '登录中…' : '登录' }}</button>
+      </form>
+    </div>
   </div>
 </template>
 
@@ -475,6 +549,98 @@ body, html {
   font-size: 12px;
   color: var(--success);
   margin-top: 4px;
+}
+
+.profile-actions {
+  margin-left: auto;
+}
+
+.profile-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--sidebar-text);
+  padding: 4px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.profile-btn:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.login-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.login-modal {
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 26px;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+}
+
+.login-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.login-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.login-eyebrow {
+  margin: 0 0 5px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-close {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.login-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-error {
+  margin: 0;
+  padding: 9px 11px;
+  color: #991b1b;
+  background: var(--danger-bg);
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 3px;
 }
 
 /* 主内容区 */

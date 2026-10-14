@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { baseDataDir } = require('./utils/dir');
 
 const dataDir = baseDataDir;
@@ -116,6 +117,145 @@ function initDb() {
         value TEXT
       )
     `);
+
+    // Authentication and authorization tables.
+    db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        display_name TEXT,
+        email TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login_at DATETIME
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        description TEXT,
+        built_in INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        permission_key TEXT NOT NULL UNIQUE,
+        name TEXT,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        user_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, role_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        role_id INTEGER NOT NULL,
+        permission_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (role_id, permission_id),
+        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+        FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash TEXT NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        revoked_at DATETIME,
+        ip TEXT,
+        user_agent TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action TEXT NOT NULL,
+        resource TEXT,
+        resource_id TEXT,
+        details TEXT,
+        result TEXT NOT NULL DEFAULT 'success',
+        ip TEXT,
+        user_agent TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    const permissionSeeds = [
+      ['account.view', '查看账号'], ['account.manage', '管理账号'],
+      ['role.view', '查看角色'], ['role.manage', '管理角色'],
+      ['payment.config.view', '查看支付配置'], ['payment.config.manage', '管理支付配置'],
+      ['payment.method.manage', '管理支付方式'], ['payment.create', '创建收款'],
+      ['payment.confirm', '确认支付'], ['payment.record.view', '查看支付记录'],
+      ['payment.reconcile', '对账'], ['refund.view', '查看退款'],
+      ['refund.request', '发起退款'], ['refund.approve', '审批退款'],
+      ['refund.execute', '执行退款'], ['order.view', '查看订单'],
+      ['order.manage', '管理订单'], ['report.view', '查看报表'],
+      ['report.export', '导出报表'], ['exception.manage', '处理异常'],
+      ['archive.view', '查看归档'], ['archive.run', '执行归档'],
+      ['archive.restore', '恢复归档'], ['*', '全部权限']
+    ];
+    permissionSeeds.forEach(([key, name]) => {
+      db.run('INSERT OR IGNORE INTO permissions (permission_key, name) VALUES (?, ?)', [key, name]);
+    });
+    const roleSeeds = [
+      ['store_owner', '店主/超级管理员', 1], ['admin', '管理员', 1],
+      ['manager', '经理', 1], ['cashier', '收银员', 1],
+      ['finance_auditor', '财务/审计', 1], ['readonly', '只读用户', 1]
+    ];
+    roleSeeds.forEach(([name, description, builtIn]) => {
+      db.run('INSERT OR IGNORE INTO roles (name, description, built_in) VALUES (?, ?, ?)', [name, description, builtIn]);
+    });
+    // The seed statements run in this serialized queue after the role/permission inserts.
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'store_owner'`);
+    // Administrators handle daily operations but cannot alter accounts/roles.
+    db.run(`DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')`);
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'admin' AND p.permission_key IN
+      ('payment.config.view','payment.config.manage','payment.method.manage','payment.create','payment.confirm','payment.record.view','payment.reconcile','refund.view','refund.request','refund.approve','refund.execute','order.view','order.manage','report.view','report.export','exception.manage','archive.view')`);
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'manager' AND p.permission_key IN
+      ('account.view','payment.config.view','payment.create','payment.confirm','payment.record.view','payment.reconcile','refund.view','refund.request','order.view','order.manage','report.view','report.export','exception.manage')`);
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'cashier' AND p.permission_key IN ('payment.create','payment.confirm','payment.record.view','order.view')`);
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'finance_auditor' AND p.permission_key IN ('order.view','payment.record.view','payment.reconcile','refund.view','report.view','report.export')`);
+    db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+      WHERE r.name = 'readonly' AND p.permission_key IN ('account.view','role.view','order.view','payment.record.view','refund.view','report.view','archive.view')`);
+
+    const initialPassword = process.env.ADMIN_PASSWORD || 'admin';
+    const initialSalt = process.env.ADMIN_PASSWORD_SALT || 'mini-shop-admin';
+    const initialHash = `scrypt$${initialSalt}$${crypto.scryptSync(initialPassword, initialSalt, 64).toString('hex')}`;
+    db.run(`INSERT OR IGNORE INTO users (username, password_hash, display_name, status) VALUES ('admin', ?, '管理员', 'active')`, [initialHash]);
+    db.run(`INSERT OR IGNORE INTO user_roles (user_id, role_id)
+      SELECT u.id, r.id FROM users u CROSS JOIN roles r
+      WHERE u.username = 'admin' AND r.name = 'store_owner'`);
 
     db.run(`
       CREATE TABLE IF NOT EXISTS product_price_logs (

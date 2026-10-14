@@ -15,13 +15,29 @@ const request = axios.create({
   timeout: 10000,
 })
 
+request.interceptors.request.use((config) => {
+  try {
+    const token = localStorage.getItem('mini-shop-auth-token')
+    if (token) config.headers.Authorization = `Bearer ${token}`
+  } catch {
+    // localStorage may be unavailable in a restricted webview.
+  }
+  return config
+})
+
 request.interceptors.response.use(
   (response) => {
     return response.data
   },
   (error) => {
+    const status = error.response?.status
+    if ((status === 401 || status === 403) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:error', { detail: { status, data: error.response?.data } }))
+    }
     if (error.response && error.response.data) {
-      return Promise.reject(error.response.data)
+      const payload = error.response.data
+      if (payload && typeof payload === 'object') payload.status = status
+      return Promise.reject(payload)
     }
     return Promise.reject(error)
   }

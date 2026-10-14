@@ -311,8 +311,9 @@ exports.refundOrder = async (req, res) => {
 
     await dbRunAsync("BEGIN TRANSACTION");
     await dbRunAsync("UPDATE orders SET refunded_amount = ?, refund_status = ? WHERE id = ?", [newRefunded, newStatus, orderId]);
-    await dbRunAsync("INSERT INTO refund_logs (order_id, refund_amount, refund_method, refund_reason, operator) VALUES (?, ?, ?, ?, ?)", 
-      [orderId, refundAmount, method || 'cash', reason || '', 'admin']);
+    const operator = req.user?.username || (req.user?.id ? String(req.user.id) : 'unknown');
+    await dbRunAsync("INSERT INTO refund_logs (order_id, refund_amount, refund_method, refund_reason, operator) VALUES (?, ?, ?, ?, ?)",
+      [orderId, refundAmount, method || 'cash', reason || '', operator]);
     await dbRunAsync("COMMIT");
 
     res.json({ message: '退款成功', refunded_amount: newRefunded, refund_status: newStatus });

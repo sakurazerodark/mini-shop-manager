@@ -8,7 +8,13 @@ const suppliersRoutes = require('./suppliers');
 const reportsRoutes = require('./reports');
 const ordersRoutes = require('./orders');
 const paymentsRoutes = require('./payments');
+const authRoutes = require('./auth');
+const usersRoutes = require('./users');
+const rolesRoutes = require('./roles');
 
+router.use('/auth', authRoutes);
+router.use('/users', usersRoutes);
+router.use('/roles', rolesRoutes);
 router.use('/barcode', barcodeRoutes);
 router.use('/products', productsRoutes);
 router.use('/settings', settingsRoutes);

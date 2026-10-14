@@ -75,10 +75,28 @@ const accessLogger = winston.createLogger({
   ]
 });
 
+// Security-sensitive actions get their own stream so operators can review
+// authorization outcomes without trawling through general application logs.
+const auditLogger = winston.createLogger({
+  level: 'info',
+  format: fileFormat,
+  transports: [
+    new winston.transports.Console({ format: consoleFormat }),
+    new winston.transports.DailyRotateFile({
+      filename: path.join(logsDir, 'audit-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: true,
+      maxSize: '20m',
+      maxFiles: '90d'
+    })
+  ]
+});
+
 module.exports = {
   info: (message, meta) => appLogger.info(message, meta),
   warn: (message, meta) => appLogger.warn(message, meta),
   error: (message, meta) => appLogger.error(message, meta),
-  access: (meta) => accessLogger.info('HTTP Access', meta)
+  access: (meta) => accessLogger.info('HTTP Access', meta),
+  audit: (message, meta) => auditLogger.info(message, meta)
 };
 

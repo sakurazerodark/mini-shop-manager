@@ -4,6 +4,8 @@ import InventoryManager from '../views/InventoryManager.vue'
 import SalesReport from '../views/SalesReport.vue'
 import SettingsPage from '../views/SettingsPage.vue'
 import StockLogsReport from '../views/StockLogsReport.vue'
+import AccessControl from '../views/AccessControl.vue'
+import { authState, hasPermission } from '../store'
 
 const routes = [
   {
@@ -30,12 +32,25 @@ const routes = [
     path: '/stock-logs',
     name: 'StockLogsReport',
     component: StockLogsReport
+  },
+  {
+    path: '/access-control',
+    name: 'AccessControl',
+    component: AccessControl,
+    meta: { permission: 'account.view' }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to) => {
+  const required = to.meta?.permission
+  if (!required || !authState.token) return true
+  if (hasPermission(required)) return true
+  return { path: '/', replace: true }
 })
 
 export default router
