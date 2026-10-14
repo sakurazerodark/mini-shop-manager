@@ -94,6 +94,10 @@ npm run build:electron
 - [ ] 促销折扣系统（满减、会员价、折扣券）
 - [ ] 引入图表库 (Echarts) 以可视化展示周/月销量趋势
 
+## 📌 需求规划
+
+账号与权限、支付方式分类和排序、支付扫码输入隔离、明细分页与当天筛选、历史冷数据归档等新增需求及验收标准，见 [`docs/agent/requirements.md`](docs/agent/requirements.md)。
+
 ## 📄 许可证 (License)
 
 [MIT License](LICENSE)
