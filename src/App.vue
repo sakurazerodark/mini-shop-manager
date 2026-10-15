@@ -681,13 +681,15 @@ body, html {
 
 .user-profile {
   padding: 20px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  white-space: nowrap;
+  min-width: 0;
 }
 
 .user-profile.collapsed {
+  display: flex;
   padding: 20px 0;
   justify-content: center;
 }
@@ -708,18 +710,29 @@ body, html {
   font-size: 14px;
   font-weight: 600;
   color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .info .status {
   font-size: 12px;
   color: var(--success);
   margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-actions {
-  margin-left: auto;
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
 }
 
 .profile-btn {
+  flex: 1 1 0;
+  min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   background: transparent;
@@ -727,6 +740,9 @@ body, html {
   padding: 4px 7px;
   font-size: 11px;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .profile-btn:hover {
