@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { dbRun, dbGet, dbAll } = require('../database');
 
 const SESSION_DAYS = Math.max(1, Number(process.env.AUTH_SESSION_DAYS || 7));
+const DEFAULT_PASSWORD_SETTING_KEY = 'default_user_password_hash';
 
 const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => {
   const value = crypto.scryptSync(String(password), salt, 64).toString('hex');
@@ -19,6 +20,45 @@ const verifyPassword = (password, encoded) => {
 
 const toSqlDate = (date) => date.toISOString().replace('T', ' ').slice(0, 19);
 const tokenHash = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
+
+const validatePassword = (password) => {
+  if (String(password || '').length < 6) {
+    const error = new Error('密码至少需要 6 个字符');
+    error.code = 'INVALID_PASSWORD';
+    throw error;
+  }
+};
+
+const getDefaultPasswordHash = async () => {
+  const row = await dbGet('SELECT value FROM settings WHERE key = ?', [DEFAULT_PASSWORD_SETTING_KEY]);
+  return row?.value || null;
+};
+
+const getDefaultPasswordStatus = async () => ({ configured: Boolean(await getDefaultPasswordHash()) });
+
+const setDefaultPassword = async (password) => {
+  validatePassword(password);
+  await dbRun(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [DEFAULT_PASSWORD_SETTING_KEY, hashPassword(password)]
+  );
+  return getDefaultPasswordStatus();
+};
+
+const resolvePasswordHash = async (password) => {
+  if (password !== undefined && password !== null && String(password).length > 0) {
+    validatePassword(password);
+    return hashPassword(password);
+  }
+  const defaultHash = await getDefaultPasswordHash();
+  if (!defaultHash) {
+    const error = new Error('尚未设置默认密码，请先在系统设置中配置');
+    error.code = 'DEFAULT_PASSWORD_NOT_SET';
+    throw error;
+  }
+  return defaultHash;
+};
 
 const publicUser = (user) => user && ({
   id: user.id,
@@ -133,6 +173,35 @@ const revokeSession = async (token) => {
   if (token) await dbRun('UPDATE sessions SET revoked_at = datetime(\'now\') WHERE token_hash = ?', [tokenHash(token)]);
 };
 
+const revokeUserSessions = async (userId, exceptToken = '') => {
+  if (exceptToken) {
+    await dbRun(
+      'UPDATE sessions SET revoked_at = datetime(\'now\') WHERE user_id = ? AND token_hash <> ? AND revoked_at IS NULL',
+      [userId, tokenHash(exceptToken)]
+    );
+  } else {
+    await dbRun('UPDATE sessions SET revoked_at = datetime(\'now\') WHERE user_id = ? AND revoked_at IS NULL', [userId]);
+  }
+};
+
+const changePassword = async (userId, currentPassword, newPassword, currentToken = '') => {
+  const record = await getUserRecord(userId);
+  if (!record) {
+    const error = new Error('账号不存在');
+    error.code = 'ACCOUNT_NOT_FOUND';
+    throw error;
+  }
+  if (!verifyPassword(currentPassword, record.password_hash)) {
+    const error = new Error('当前密码不正确');
+    error.code = 'INVALID_CURRENT_PASSWORD';
+    throw error;
+  }
+  validatePassword(newPassword);
+  await dbRun('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?', [hashPassword(newPassword), userId]);
+  await revokeUserSessions(userId, currentToken);
+  return publicUser(await getUserById(userId));
+};
+
 const listUsers = async ({ page = 1, pageSize = 20, search = '', status = '' } = {}) => {
   page = Math.max(1, Number(page) || 1); pageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
   const clauses = []; const params = [];
@@ -147,9 +216,16 @@ const listUsers = async ({ page = 1, pageSize = 20, search = '', status = '' } =
 };
 
 const createUser = async ({ username, password, display_name, email, status = 'active', role_ids = [] }) => {
-  if (!String(username || '').trim() || String(username).trim().length > 64) throw new Error('用户名不能为空且不能超过64个字符');
-  if (String(password || '').length < 6) throw new Error('密码至少需要6个字符');
-  const result = await dbRun('INSERT INTO users (username, password_hash, display_name, email, status, updated_at) VALUES (?, ?, ?, ?, ?, datetime(\'now\'))', [String(username).trim(), hashPassword(password), display_name || String(username).trim(), email || null, status === 'disabled' ? 'disabled' : 'active']);
+  if (!String(username || '').trim() || String(username).trim().length > 64) {
+    const error = new Error('用户名不能为空且不能超过 64 个字符');
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+  const passwordHash = await resolvePasswordHash(password);
+  const result = await dbRun(
+    'INSERT INTO users (username, password_hash, display_name, email, status, updated_at) VALUES (?, ?, ?, ?, ?, datetime(\'now\'))',
+    [String(username).trim(), passwordHash, display_name || String(username).trim(), email || null, status === 'disabled' ? 'disabled' : 'active']
+  );
   const userId = result.lastID;
   await setUserRoles(userId, role_ids);
   return publicUser(await getUserById(userId));
@@ -163,6 +239,19 @@ const updateUser = async (id, fields = {}) => {
   if (fields.password !== undefined) { if (String(fields.password).length < 6) throw new Error('密码至少需要6个字符'); updates.push('password_hash = ?'); params.push(hashPassword(fields.password)); }
   if (updates.length) { updates.push("updated_at = datetime('now')"); await dbRun(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, [...params, id]); }
   if (fields.role_ids !== undefined) await setUserRoles(id, fields.role_ids);
+  return publicUser(await getUserById(id));
+};
+
+const resetUserPassword = async (id, newPassword) => {
+  const existing = await getUserRecord(id);
+  if (!existing) {
+    const error = new Error('账号不存在');
+    error.code = 'ACCOUNT_NOT_FOUND';
+    throw error;
+  }
+  const passwordHash = await resolvePasswordHash(newPassword);
+  await dbRun('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?', [passwordHash, id]);
+  await revokeUserSessions(id);
   return publicUser(await getUserById(id));
 };
 
@@ -212,4 +301,29 @@ const writeAudit = async ({ userId, action, resource, resourceId, details, resul
   await dbRun('INSERT INTO audit_logs (user_id, action, resource, resource_id, details, result, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [userId || null, action, resource || null, resourceId == null ? null : String(resourceId), details ? JSON.stringify(details) : null, result, ip || '', userAgent || '']);
 };
 
-module.exports = { hashPassword, verifyPassword, publicUser, getUserById, login, getSessionUser, revokeSession, listUsers, createUser, updateUser, setUserRoles, listRoles, createRole, updateRole, setRolePermissions, writeAudit, getSuperAdminCount, getAuthSetupStatus, bootstrapSuperAdmin };
+module.exports = {
+  hashPassword,
+  verifyPassword,
+  publicUser,
+  getUserById,
+  login,
+  getSessionUser,
+  revokeSession,
+  revokeUserSessions,
+  changePassword,
+  listUsers,
+  createUser,
+  resetUserPassword,
+  updateUser,
+  setUserRoles,
+  listRoles,
+  createRole,
+  updateRole,
+  setRolePermissions,
+  writeAudit,
+  getSuperAdminCount,
+  getAuthSetupStatus,
+  bootstrapSuperAdmin,
+  getDefaultPasswordStatus,
+  setDefaultPassword
+};

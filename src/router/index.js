@@ -11,17 +11,20 @@ const routes = [
   {
     path: '/',
     name: 'PosTerminal',
-    component: PosTerminal
+    component: PosTerminal,
+    meta: { permission: 'payment.create' }
   },
   {
     path: '/inventory',
     name: 'InventoryManager',
-    component: InventoryManager
+    component: InventoryManager,
+    meta: { permission: 'order.manage' }
   },
   {
     path: '/report',
     name: 'SalesReport',
-    component: SalesReport
+    component: SalesReport,
+    meta: { permission: 'report.view' }
   },
   {
     path: '/settings',
@@ -32,13 +35,14 @@ const routes = [
   {
     path: '/stock-logs',
     name: 'StockLogsReport',
-    component: StockLogsReport
+    component: StockLogsReport,
+    meta: { permission: 'order.view' }
   },
   {
     path: '/access-control',
     name: 'AccessControl',
     component: AccessControl,
-    meta: { permission: 'account.view' }
+    meta: { permissions: ['account.view', 'role.view'] }
   }
 ]
 
@@ -51,8 +55,17 @@ router.beforeEach((to) => {
   const required = to.meta?.permission
   const anyOf = Array.isArray(to.meta?.permissions) ? to.meta.permissions : []
   if ((!required && !anyOf.length) || !authState.token) return true
+  // App.vue holds the view until the session and permissions have been
+  // hydrated. Allow the pending navigation through so the completed request
+  // can re-evaluate it without briefly exposing an unauthorized screen.
+  if (!authState.initialized || !authState.permissionsLoaded) return true
   if ((required && hasPermission(required)) || (anyOf.length && anyOf.some(hasPermission))) return true
-  return { path: '/', replace: true }
+  const fallback = routes.find((route) => {
+    const permission = route.meta?.permission
+    const permissions = Array.isArray(route.meta?.permissions) ? route.meta.permissions : []
+    return permission ? hasPermission(permission) : permissions.some(hasPermission)
+  })
+  return fallback ? { path: fallback.path, replace: true } : false
 })
 
 export default router

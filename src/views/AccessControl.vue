@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import {
   createRole,
   createUser,
+  getRoleDisplayName,
   deleteRole,
   deleteUser,
   getRolePermissions,
@@ -10,6 +11,7 @@ import {
   listRoles,
   listUsers,
   permissionCatalog,
+  resetUserPassword,
   updateRole,
   updateRolePermissions,
   updateUser
@@ -28,9 +30,12 @@ const rolePermissions = ref([])
 const search = ref('')
 const showUserForm = ref(false)
 const showRoleForm = ref(false)
+const showResetPassword = ref(false)
 const editingUser = ref(null)
 const editingRole = ref(null)
+const resettingUser = ref(null)
 const userForm = ref({ username: '', display_name: '', password: '', role_id: '', enabled: true })
+const resetPasswordForm = ref({ password: '', confirm_password: '' })
 const roleForm = ref({ name: '', description: '' })
 
 const canViewAccounts = computed(() => hasPermission('account.view'))
@@ -121,6 +126,31 @@ const openEditUser = (user) => {
   editingUser.value = user
   userForm.value = { username: user.username || '', display_name: user.display_name || user.name || '', password: '', role_id: user.role_id || user.role?.id || '', enabled: user.enabled !== false && user.status !== 'disabled' }
   showUserForm.value = true
+}
+
+const openResetPassword = (user) => {
+  resettingUser.value = user
+  resetPasswordForm.value = { password: '', confirm_password: '' }
+  showResetPassword.value = true
+}
+
+const submitResetPassword = async () => {
+  if (!resettingUser.value) return
+  saving.value = true
+  try {
+    const password = resetPasswordForm.value.password.trim()
+    if (password && password !== resetPasswordForm.value.confirm_password) {
+      notify('两次输入的密码不一致', 'warning')
+      return
+    }
+    await resetUserPassword(resettingUser.value.id, password ? { new_password: password } : {})
+    notify(password ? '密码已重置' : '密码已重置为默认密码', 'success')
+    showResetPassword.value = false
+  } catch (error) {
+    notify(error?.error || error?.message || '重置密码失败', 'error')
+  } finally {
+    saving.value = false
+  }
 }
 
 const saveUser = async () => {
@@ -263,10 +293,10 @@ onMounted(refresh)
               <tr v-for="user in filteredUsers" :key="user.id">
                 <td><strong>{{ user.username }}</strong></td>
                 <td>{{ user.display_name || user.name || '—' }}</td>
-                <td>{{ user.roles?.map(role => role.name).join(', ') || user.role?.name || user.role_name || '未分配' }}</td>
+                <td>{{ user.roles?.map(role => getRoleDisplayName(role)).join(', ') || getRoleDisplayName(user.role || user.role_name) || '未分配' }}</td>
                 <td><span class="status-dot" :class="{ off: user.enabled === false || user.status === 'disabled' }">{{ user.enabled === false || user.status === 'disabled' ? '停用' : '启用' }}</span></td>
                 <td class="muted">{{ user.last_login_at || user.lastLoginAt || '—' }}</td>
-                <td class="actions-col" v-if="canManageAccounts"><button class="link-btn" @click="openEditUser(user)">编辑</button><button class="link-btn" @click="toggleUser(user)">{{ user.enabled === false || user.status === 'disabled' ? '启用' : '停用' }}</button><button class="link-btn danger" @click="removeUser(user)">删除</button></td>
+                <td class="actions-col" v-if="canManageAccounts"><button class="link-btn" @click="openEditUser(user)">编辑</button><button class="link-btn" @click="openResetPassword(user)">重置密码</button><button class="link-btn" @click="toggleUser(user)">{{ user.enabled === false || user.status === 'disabled' ? '启用' : '停用' }}</button><button class="link-btn danger" @click="removeUser(user)">删除</button></td>
                 <td v-else class="muted">—</td>
               </tr>
               <tr v-if="!filteredUsers.length"><td colspan="6" class="empty-cell">暂无账号</td></tr>
@@ -281,18 +311,19 @@ onMounted(refresh)
       <template v-else>
         <div class="role-list">
           <div class="panel-toolbar"><strong>角色</strong><button v-if="canManageRoles" class="btn btn-primary btn-small" @click="openNewRole">新增</button></div>
-          <button v-for="role in roles" :key="role.id" class="role-row" :class="{ selected: selectedRoleId === role.id }" @click="selectedRoleId = role.id; loadRolePermissions(role.id)"><span><strong>{{ role.name }}</strong><small>{{ role.description || '暂无描述' }}</small></span><span class="role-count">{{ role.user_count ?? role.userCount ?? 0 }}人</span></button>
+          <button v-for="role in roles" :key="role.id" class="role-row" :class="{ selected: selectedRoleId === role.id }" @click="selectedRoleId = role.id; loadRolePermissions(role.id)"><span><strong>{{ getRoleDisplayName(role) }}</strong><small>{{ role.description || '暂无描述' }}</small></span><span class="role-count">{{ role.user_count ?? role.userCount ?? 0 }}人</span></button>
           <div v-if="!roles.length" class="empty-state compact">暂无角色</div>
         </div>
         <div class="permission-panel">
-          <div class="panel-toolbar"><div><strong>{{ roles.find(item => item.id === selectedRoleId)?.name || '选择角色' }}</strong><p class="muted">勾选资源操作权限</p></div><button v-if="canManageRoles && selectedRoleId" class="btn btn-primary" @click="saveRolePermissions" :disabled="saving">保存权限</button></div>
+          <div class="panel-toolbar"><div><strong>{{ getRoleDisplayName(roles.find(item => item.id === selectedRoleId)) || '选择角色' }}</strong><p class="muted">勾选资源操作权限</p></div><button v-if="canManageRoles && selectedRoleId" class="btn btn-primary" @click="saveRolePermissions" :disabled="saving">保存权限</button></div>
           <div v-if="selectedRoleId" class="permission-grid"><label v-for="permission in permissions" :key="permission.code" class="permission-item"><input type="checkbox" :checked="permissionChecked(permission.code)" :disabled="!canManageRoles" @change="togglePermission(permission.code)" /><span><strong>{{ permission.label || permission.name || permission.code }}</strong><code>{{ permission.code }}</code></span></label></div>
           <div v-else class="empty-state">请选择一个角色查看权限。</div>
         </div>
       </template>
     </section>
 
-    <div v-if="showUserForm" class="modal-backdrop" @click.self="showUserForm = false"><form class="access-modal" @submit.prevent="saveUser"><div class="modal-head"><h2>{{ editingUser ? '编辑账号' : '新增账号' }}</h2><button type="button" class="icon-btn" @click="showUserForm = false">×</button></div><label>登录账号<input v-model="userForm.username" class="form-input" required /></label><label>显示姓名<input v-model="userForm.display_name" class="form-input" /></label><label>密码<input v-model="userForm.password" class="form-input" type="password" :placeholder="editingUser ? '留空表示不修改' : '设置初始密码'" :required="!editingUser" /></label><label>角色<select v-model="userForm.role_id" class="form-input"><option value="">未分配</option><option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option></select></label><label class="check-line"><input v-model="userForm.enabled" type="checkbox" />账号启用</label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showUserForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
+    <div v-if="showUserForm" class="modal-backdrop" @click.self="showUserForm = false"><form class="access-modal" @submit.prevent="saveUser"><div class="modal-head"><h2>{{ editingUser ? '编辑账号' : '新增账号' }}</h2><button type="button" class="icon-btn" @click="showUserForm = false">×</button></div><label>登录账号<input v-model="userForm.username" class="form-input" required /></label><label>显示姓名<input v-model="userForm.display_name" class="form-input" /></label><label>密码<input v-model="userForm.password" class="form-input" type="password" :placeholder="editingUser ? '留空表示不修改' : '留空使用默认密码'" :required="false" /></label><label>角色<select v-model="userForm.role_id" class="form-input"><option value="">未分配</option><option v-for="role in roles" :key="role.id" :value="role.id">{{ getRoleDisplayName(role) }}</option></select></label><label class="check-line"><input v-model="userForm.enabled" type="checkbox" />账号启用</label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showUserForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
+    <div v-if="showResetPassword" class="modal-backdrop" @click.self="showResetPassword = false"><form class="access-modal" @submit.prevent="submitResetPassword"><div class="modal-head"><h2>重置密码</h2><button type="button" class="icon-btn" @click="showResetPassword = false">×</button></div><p class="muted">账号：{{ resettingUser?.username }}</p><label>新密码<input v-model="resetPasswordForm.password" class="form-input" type="password" minlength="6" placeholder="留空使用默认密码" /></label><label v-if="resetPasswordForm.password">确认新密码<input v-model="resetPasswordForm.confirm_password" class="form-input" type="password" minlength="6" required /></label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showResetPassword = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '提交中…' : '确认重置' }}</button></div></form></div>
     <div v-if="showRoleForm" class="modal-backdrop" @click.self="showRoleForm = false"><form class="access-modal" @submit.prevent="saveRole"><div class="modal-head"><h2>{{ editingRole ? '编辑角色' : '新增角色' }}</h2><button type="button" class="icon-btn" @click="showRoleForm = false">×</button></div><label>角色名称<input v-model="roleForm.name" class="form-input" required /></label><label>描述<textarea v-model="roleForm.description" class="form-input" rows="3"></textarea></label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showRoleForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
   </div>
 </template>

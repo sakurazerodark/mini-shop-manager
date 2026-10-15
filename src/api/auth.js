@@ -6,7 +6,9 @@ const unwrap = (payload) => payload?.data ?? payload
 const applySession = (payload) => {
   const data = unwrap(payload) || {}
   const token = data.token || data.access_token || data.accessToken
-  const user = data.user || data.account || data.me
+  // `/auth/me` returns the user object directly while login wraps it in
+  // `{ user }`; accept both shapes so a newly opened tab hydrates permissions.
+  const user = data.user || data.account || data.me || (data.id && data.username ? data : undefined)
   const rawPermissions = data.permissions || user?.permissions || user?.permission_codes || user?.permissionKeys || []
   const permissions = Array.isArray(rawPermissions)
     ? rawPermissions.map(item => typeof item === 'string' ? item : item?.permission_key || item?.code || item?.key).filter(Boolean)
@@ -55,10 +57,13 @@ export const logout = async () => {
   }
 }
 
+export const changePassword = (data) => request.post('/auth/change-password', data)
+
 export const listUsers = (params) => request.get('/users', { params })
 export const createUser = (data) => request.post('/users', data)
 export const updateUser = (id, data) => request.put(`/users/${id}`, data)
 export const deleteUser = (id) => request.delete(`/users/${id}`)
+export const resetUserPassword = (id, data = {}) => request.post(`/users/${id}/reset-password`, data)
 export const listRoles = (params) => request.get('/roles', { params })
 export const createRole = (data) => request.post('/roles', data)
 export const updateRole = (id, data) => request.put(`/roles/${id}`, data)
@@ -66,6 +71,21 @@ export const deleteRole = (id) => request.delete(`/roles/${id}`)
 export const listPermissions = () => request.get('/roles/permissions')
 export const getRolePermissions = (id) => request.get(`/roles/${id}/permissions`)
 export const updateRolePermissions = (id, permissions) => request.put(`/roles/${id}/permissions`, { permissions })
+
+export const roleDisplayNames = {
+  store_owner: '店主/超级管理员',
+  admin: '管理员',
+  manager: '经理',
+  cashier: '收银员',
+  finance_auditor: '财务/审计',
+  readonly: '只读用户'
+}
+
+export const getRoleDisplayName = (role) => {
+  if (!role) return ''
+  const code = typeof role === 'string' ? role : role?.code || role?.name || role?.role_name
+  return roleDisplayNames[code] || (typeof role === 'string' ? role : role?.display_name || role?.name || '未知角色')
+}
 
 export const permissionCatalog = [
   { code: 'account.view', label: '查看账号' },

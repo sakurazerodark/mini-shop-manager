@@ -92,6 +92,41 @@ router.post('/logout', authenticate, async (req, res) => {
   res.json({ message: '已退出登录' });
 });
 
+router.post('/change-password', authenticate, async (req, res) => {
+  const currentPassword = req.body?.current_password;
+  const newPassword = req.body?.new_password;
+  try {
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      const error = new Error('Current and new passwords are required');
+      error.code = 'INVALID_INPUT';
+      throw error;
+    }
+    const user = await authService.changePassword(req.user.id, currentPassword, newPassword, req.authToken);
+    await authService.writeAudit({
+      userId: req.user.id,
+      action: 'auth.password.change',
+      resource: 'user',
+      resourceId: req.user.id,
+      details: { username: req.user.username },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+    res.json({ data: user });
+  } catch (error) {
+    await authService.writeAudit({
+      userId: req.user.id,
+      action: 'auth.password.change',
+      resource: 'user',
+      resourceId: req.user.id,
+      result: error.code === 'INVALID_CURRENT_PASSWORD' ? 'denied' : 'error',
+      details: { code: error.code || 'PASSWORD_CHANGE_FAILED' },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    }).catch(() => {});
+    res.status(400).json({ error: error.message, code: error.code || 'PASSWORD_CHANGE_FAILED' });
+  }
+});
+
 router.get('/me', authenticate, (req, res) => res.json({ data: req.user }));
 router.get('/permissions', authenticate, (req, res) => res.json({ data: { permissions: req.user.permissions, roles: req.user.roles } }));
 

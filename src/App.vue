@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Toast from './components/Toast.vue'
 import { getBasicSettings } from './api/settings'
-import { login, getCurrentUser, logout, getAuthStatus, bootstrapSuperAdmin } from './api/auth'
+import { login, getCurrentUser, logout, getAuthStatus, bootstrapSuperAdmin, changePassword, getRoleDisplayName } from './api/auth'
 import { authState, clearAuthSession, globalStoreName as storeName, hasPermission } from './store'
 
 const route = useRoute()
@@ -17,6 +17,10 @@ const setupError = ref('')
 const authMode = ref('login')
 const authReady = ref(false)
 const setupSubmitting = ref(false)
+const showChangePassword = ref(false)
+const changePasswordSubmitting = ref(false)
+const changePasswordError = ref('')
+const changePasswordForm = ref({ current_password: '', new_password: '', confirm_password: '' })
 
 const fetchStoreName = async () => {
   if (!authState.token) return
@@ -49,6 +53,7 @@ const initializeAuth = async () => {
     const status = await getAuthStatus()
     if (!authState.token) {
       authMode.value = readAuthStatus(status) ? 'setup' : 'login'
+      authState.permissionsLoaded = true
       authState.initialized = true
       return
     }
@@ -57,6 +62,9 @@ const initializeAuth = async () => {
       await getCurrentUser()
       authState.initialized = true
       await fetchStoreName()
+      // Re-run the current route after permissions arrive. This handles a
+      // direct link to a page that the restored account cannot access.
+      await router.replace(route.fullPath)
     } catch {
       clearAuthSession()
       authMode.value = readAuthStatus(status) ? 'setup' : 'login'
@@ -144,6 +152,40 @@ const handleLogout = async () => {
   loginForm.value = { username: '', password: '' }
   window.$toast?.('已退出登录', 'success')
 }
+
+const openChangePassword = () => {
+  changePasswordError.value = ''
+  changePasswordForm.value = { current_password: '', new_password: '', confirm_password: '' }
+  showChangePassword.value = true
+}
+
+const submitChangePassword = async () => {
+  changePasswordError.value = ''
+  const form = changePasswordForm.value
+  if (!form.current_password || !form.new_password) {
+    changePasswordError.value = '请输入当前密码和新密码'
+    return
+  }
+  if (form.new_password.length < 6) {
+    changePasswordError.value = '新密码至少需要 6 个字符'
+    return
+  }
+  if (form.new_password !== form.confirm_password) {
+    changePasswordError.value = '两次输入的新密码不一致'
+    return
+  }
+  changePasswordSubmitting.value = true
+  try {
+    await changePassword({ current_password: form.current_password, new_password: form.new_password })
+    showChangePassword.value = false
+    window.$toast?.('密码已修改，请重新登录', 'success')
+    await handleLogout()
+  } catch (error) {
+    changePasswordError.value = error?.error || error?.message || '修改密码失败'
+  } finally {
+    changePasswordSubmitting.value = false
+  }
+}
 const isMobileNavOpen = ref(false)
 const expandReport = ref(false)
 
@@ -173,7 +215,7 @@ const canManageInventory = computed(() => hasPermission('order.manage'))
 const canViewReports = computed(() => hasPermission('report.view'))
 const canViewSettings = computed(() => hasPermission('payment.config.view'))
 const displayUserName = computed(() => authState.user?.display_name || authState.user?.name || authState.user?.username || '未登录')
-const displayRoleName = computed(() => authState.user?.role?.name || authState.user?.role_name || (authState.user ? '已登录' : '访客'))
+const displayRoleName = computed(() => getRoleDisplayName(authState.user?.role || authState.user?.role_name || authState.user?.roles?.[0]) || (authState.user ? '已登录' : '访客'))
 
 const setView = (path) => {
   router.push(path)
@@ -182,7 +224,7 @@ const setView = (path) => {
 </script>
 
 <template>
-  <div v-if="authReady && authState.token && authState.user" class="app-layout" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'mobile-nav-open': isMobileNavOpen }">
+  <div v-if="authReady && authState.token && authState.user && authState.initialized && authState.permissionsLoaded" class="app-layout" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'mobile-nav-open': isMobileNavOpen }">
     <div class="mobile-topbar">
       <button class="mobile-menu-btn" @click="isMobileNavOpen = true" aria-label="打开菜单">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -292,6 +334,7 @@ const setView = (path) => {
             <div class="status">● {{ displayRoleName }}</div>
           </div>
           <div class="profile-actions">
+            <button class="profile-btn" @click="openChangePassword">修改密码</button>
             <button class="profile-btn" @click="handleLogout">退出</button>
           </div>
         </div>
@@ -305,6 +348,17 @@ const setView = (path) => {
     <main class="main-content">
       <router-view></router-view>
     </main>
+
+    <div v-if="showChangePassword" class="login-backdrop" @click.self="showChangePassword = false">
+      <form class="login-modal" @submit.prevent="submitChangePassword">
+        <div class="login-head"><div><p class="login-eyebrow">账号安全</p><h2>修改本人密码</h2></div><button type="button" class="login-close" @click="showChangePassword = false">×</button></div>
+        <p v-if="changePasswordError" class="login-error">{{ changePasswordError }}</p>
+        <label>当前密码<input v-model="changePasswordForm.current_password" class="form-input" type="password" autocomplete="current-password" required /></label>
+        <label>新密码<input v-model="changePasswordForm.new_password" class="form-input" type="password" autocomplete="new-password" minlength="6" required /></label>
+        <label>确认新密码<input v-model="changePasswordForm.confirm_password" class="form-input" type="password" autocomplete="new-password" minlength="6" required /></label>
+        <div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showChangePassword = false">取消</button><button class="btn btn-primary" :disabled="changePasswordSubmitting">{{ changePasswordSubmitting ? '提交中…' : '确认修改' }}</button></div>
+      </form>
+    </div>
 
     <div class="mobile-tabbar" role="navigation" aria-label="底部导航">
       <button v-if="canUsePos" class="tab-item" :class="{ active: route.path === '/' }" @click="setView('/')">
@@ -323,7 +377,7 @@ const setView = (path) => {
 
   </div>
 
-  <main v-else-if="authReady" class="auth-screen">
+  <main v-else-if="authReady && !authState.token" class="auth-screen">
     <section class="auth-panel">
       <div class="auth-brand"><span class="auth-brand-mark">M</span><span>MiniShop</span></div>
       <template v-if="authMode === 'setup'">
@@ -744,6 +798,13 @@ body, html {
 .login-submit {
   width: 100%;
   margin-top: 3px;
+}
+
+.login-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 /* 认证首屏 */

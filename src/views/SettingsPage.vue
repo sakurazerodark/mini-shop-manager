@@ -1,14 +1,18 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getBasicSettings, updateBasicSettings, getBarcodeLookup, updateBarcodeLookup, getPayments, updatePayments, getDataDir, selectDataDir, migrateDataDir, getNetworkConfig, updateNetworkConfig } from '../api/settings'
+import { ref, computed, onMounted } from 'vue'
+import { getBasicSettings, updateBasicSettings, getBarcodeLookup, updateBarcodeLookup, getPayments, updatePayments, getDataDir, selectDataDir, migrateDataDir, getNetworkConfig, updateNetworkConfig, getDefaultPassword, updateDefaultPassword } from '../api/settings'
 import { lookupBarcode } from '../api/products'
-import { globalStoreName } from '../store'
+import { globalStoreName, hasPermission } from '../store'
 
 const currentTab = ref('basic') // 'basic', 'payment'
 const paymentTab = ref('general')
 
 const storeName = ref('店小易')
 const isSavingBasic = ref(false)
+const defaultPassword = ref('')
+const defaultPasswordSet = ref(false)
+const isSavingDefaultPassword = ref(false)
+const canManageAccounts = computed(() => hasPermission('account.manage'))
 
 const currentDataDir = ref('')
 const isElectron = ref(false)
@@ -88,6 +92,17 @@ const fetchSettings = async () => {
       networkConfig.value.remote_access = jsonNetwork?.data?.remote_access || false
       networkConfig.value.local_ip = jsonNetwork?.data?.local_ip || '127.0.0.1'
       networkConfig.value.port = jsonNetwork?.data?.port || 8080
+    }
+
+    if (canManageAccounts.value) {
+    if (canManageAccounts.value) {
+      const resDefaultPassword = await getDefaultPassword().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
+      if (resDefaultPassword.ok) {
+        const jsonDefaultPassword = await resDefaultPassword.json()
+        const data = jsonDefaultPassword?.data || jsonDefaultPassword || {}
+        defaultPasswordSet.value = Boolean(data.configured ?? data.is_set ?? data.default_password_set)
+      }
+    }
     }
   } catch (e) {
     console.error(e)
@@ -193,6 +208,29 @@ const savePaymentScope = async (scope) => {
     window.$toast('保存失败，网络错误', 'error')
   } finally {
     isSavingPayment.value = false
+  }
+}
+
+const saveDefaultPassword = async () => {
+  const password = defaultPassword.value.trim()
+  if (password && password.length < 6) {
+    window.$toast?.('默认密码至少需要 6 个字符', 'warning')
+    return
+  }
+  if (!password) {
+    window.$toast?.('请输入默认密码', 'warning')
+    return
+  }
+  isSavingDefaultPassword.value = true
+  try {
+    await updateDefaultPassword({ password })
+    defaultPassword.value = ''
+    defaultPasswordSet.value = true
+    window.$toast?.('默认密码已保存', 'success')
+  } catch (error) {
+    window.$toast?.(error?.error || error?.message || '保存默认密码失败', 'error')
+  } finally {
+    isSavingDefaultPassword.value = false
   }
 }
 
@@ -426,6 +464,26 @@ onMounted(() => {
           <div class="actions">
             <button class="btn btn-primary" @click="saveBasicSettings" :disabled="isSavingBasic">
               {{ isSavingBasic ? '保存中...' : '保存基础设置' }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="canManageAccounts" class="card">
+        <div class="card-head">
+          <div class="card-title">用户默认密码</div>
+          <div class="badge" :class="defaultPasswordSet ? 'ok' : 'warn'">
+            {{ defaultPasswordSet ? '已设置' : '未设置' }}
+          </div>
+        </div>
+        <div class="form">
+          <div class="form-group">
+            <label>默认密码 <span class="hint">新建账号未填写密码或重置时留空，将使用此密码</span></label>
+            <input v-model="defaultPassword" class="form-input" type="password" minlength="6" autocomplete="new-password" placeholder="输入新的默认密码" />
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" @click="saveDefaultPassword" :disabled="isSavingDefaultPassword">
+              {{ isSavingDefaultPassword ? '保存中...' : '保存默认密码' }}
             </button>
           </div>
         </div>

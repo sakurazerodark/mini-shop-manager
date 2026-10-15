@@ -40,6 +40,35 @@ router.get('/:id/roles', protect(PERMISSIONS.ACCOUNT_VIEW), async (req, res) => 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+router.post('/:id/reset-password', protect(PERMISSIONS.ACCOUNT_MANAGE), requireSuperAdmin, async (req, res) => {
+  try {
+    const user = await authService.resetUserPassword(req.params.id, req.body?.new_password ?? req.body?.password);
+    await authService.writeAudit({
+      userId: req.user.id,
+      action: 'user.password.reset',
+      resource: 'user',
+      resourceId: req.params.id,
+      details: { username: user.username, used_default_password: !(req.body?.new_password || req.body?.password) },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+    res.json({ data: user });
+  } catch (error) {
+    await authService.writeAudit({
+      userId: req.user.id,
+      action: 'user.password.reset',
+      resource: 'user',
+      resourceId: req.params.id,
+      result: 'error',
+      details: { code: error.code || 'PASSWORD_RESET_FAILED' },
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    }).catch(() => {});
+    const status = error.code === 'ACCOUNT_NOT_FOUND' ? 404 : 400;
+    res.status(status).json({ error: error.message, code: error.code || 'PASSWORD_RESET_FAILED' });
+  }
+});
+
 router.put('/:id/roles', protect(PERMISSIONS.ROLE_MANAGE), requireSuperAdmin, async (req, res) => {
   try {
     const user = await authService.getUserById(req.params.id);
