@@ -23,7 +23,7 @@ const changePasswordError = ref('')
 const changePasswordForm = ref({ current_password: '', new_password: '', confirm_password: '' })
 
 const fetchStoreName = async () => {
-  if (!authState.token || !authState.initialized || !authState.permissionsLoaded || !hasPermission('account.view')) return
+  if (!authState.token) return
   try {
     const res = await getBasicSettings().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
@@ -225,7 +225,7 @@ const setView = (path) => {
 
 <template>
   <div v-if="authReady && authState.token && authState.user && authState.initialized && authState.permissionsLoaded" class="app-layout" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'mobile-nav-open': isMobileNavOpen }">
-    <div v-if="canUsePos" class="mobile-topbar">
+    <div class="mobile-topbar">
       <button class="mobile-menu-btn" @click="isMobileNavOpen = true" aria-label="打开菜单">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
           <line x1="4" y1="6" x2="20" y2="6"></line>
@@ -237,7 +237,7 @@ const setView = (path) => {
       <div class="mobile-spacer"></div>
     </div>
 
-    <div v-if="canUsePos" class="mobile-overlay" @click="isMobileNavOpen = false" aria-hidden="true"></div>
+    <div class="mobile-overlay" @click="isMobileNavOpen = false" aria-hidden="true"></div>
 
     <!-- 侧边导航栏 -->
     <aside class="sidebar">
@@ -245,7 +245,7 @@ const setView = (path) => {
         <span class="logo-icon">🏪</span>
         <span class="logo-text" v-show="!isSidebarCollapsed">{{ storeName }}</span>
       </div>
-      <nav v-if="canUsePos" class="nav-menu">
+      <nav class="nav-menu">
         <a v-if="canUsePos"
           href="#" 
           :class="['nav-item', { active: route.path === '/' }]" 
@@ -345,10 +345,9 @@ const setView = (path) => {
     </aside>
 
     <!-- 主内容区 -->
-    <main v-if="canUsePos" class="main-content">
+    <main class="main-content">
       <router-view></router-view>
     </main>
-    <main v-else class="main-content main-content-empty" aria-hidden="true"></main>
 
     <div v-if="showChangePassword" class="login-backdrop" @click.self="showChangePassword = false">
       <form class="login-modal" @submit.prevent="submitChangePassword">
@@ -361,7 +360,7 @@ const setView = (path) => {
       </form>
     </div>
 
-    <div v-if="canUsePos" class="mobile-tabbar" role="navigation" aria-label="底部导航">
+    <div class="mobile-tabbar" role="navigation" aria-label="底部导航">
       <button v-if="canUsePos" class="tab-item" :class="{ active: route.path === '/' }" @click="setView('/')">
         <span class="tab-icon">🛒</span>
         <span class="tab-text">收银</span>
