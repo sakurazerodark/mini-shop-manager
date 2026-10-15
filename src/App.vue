@@ -23,7 +23,7 @@ const changePasswordError = ref('')
 const changePasswordForm = ref({ current_password: '', new_password: '', confirm_password: '' })
 
 const fetchStoreName = async () => {
-  if (!authState.token) return
+  if (!authState.token || !authState.initialized || !authState.permissionsLoaded || !hasPermission('account.view')) return
   try {
     const res = await getBasicSettings().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
@@ -214,6 +214,13 @@ const canUsePos = computed(() => hasPermission('payment.create'))
 const canManageInventory = computed(() => hasPermission('order.manage'))
 const canViewReports = computed(() => hasPermission('report.view'))
 const canViewSettings = computed(() => hasPermission('payment.config.view'))
+const canRenderCurrentView = computed(() => {
+  if (route.path === '/') return canUsePos.value
+  const required = route.meta?.permission
+  const anyOf = Array.isArray(route.meta?.permissions) ? route.meta.permissions : []
+  if (!required && !anyOf.length) return true
+  return (required && hasPermission(required)) || anyOf.some(hasPermission)
+})
 const displayUserName = computed(() => authState.user?.display_name || authState.user?.name || authState.user?.username || '未登录')
 const displayRoleName = computed(() => getRoleDisplayName(authState.user?.role || authState.user?.role_name || authState.user?.roles?.[0]) || (authState.user ? '已登录' : '访客'))
 
@@ -346,7 +353,7 @@ const setView = (path) => {
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <router-view></router-view>
+      <router-view v-if="canRenderCurrentView"></router-view>
     </main>
 
     <div v-if="showChangePassword" class="login-backdrop" @click.self="showChangePassword = false">

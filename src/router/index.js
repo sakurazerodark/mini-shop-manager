@@ -60,6 +60,9 @@ router.beforeEach((to) => {
   // can re-evaluate it without briefly exposing an unauthorized screen.
   if (!authState.initialized || !authState.permissionsLoaded) return true
   if ((required && hasPermission(required)) || (anyOf.length && anyOf.some(hasPermission))) return true
+  // Keep the default route as an intentional blank workspace when the account
+  // cannot use the cash register. Other authorized routes remain available.
+  if (to.path === '/' && required === 'payment.create') return false
   const fallback = routes.find((route) => {
     const permission = route.meta?.permission
     const permissions = Array.isArray(route.meta?.permissions) ? route.meta.permissions : []
