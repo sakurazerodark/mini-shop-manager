@@ -540,8 +540,6 @@ onMounted(() => {
       <div class="subtabs-nav">
         <button :class="['subtab-btn', { active: paymentTab === 'general' }]" @click="paymentTab = 'general'">通用配置</button>
         <button :class="['subtab-btn', { active: paymentTab === 'alipay' }]" @click="paymentTab = 'alipay'">支付宝</button>
-        <button :class="['subtab-btn', { active: paymentTab === 'wechat' }]" @click="paymentTab = 'wechat'">微信支付 (开发中)</button>
-        <button :class="['subtab-btn', { active: paymentTab === 'unionpay' }]" @click="paymentTab = 'unionpay'">云闪付 (开发中)</button>
       </div>
 
       <div class="grid" v-if="paymentTab === 'wechat'">
