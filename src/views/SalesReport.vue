@@ -3,9 +3,11 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getTodayStats, getRecentOrders, getOrders, manualPayOrder as apiManualPayOrder, cancelOrder as apiCancelOrder, getOrder, refundOrder } from '../api/orders'
 import { formatDateTime } from '../utils/format'
+import { hasPermission } from '../store'
 
 const route = useRoute()
 const currentTab = computed(() => route.query.tab || 'dashboard')
+const canExecuteRefund = computed(() => hasPermission('refund.execute'))
 
 // Dashboard
   const todayStats = ref({
@@ -795,7 +797,7 @@ const pageSubtitle = computed(() => {
         </div>
         <div class="detail-footer">
           <button class="btn btn-secondary" @click="closeOrderDetail">关闭</button>
-          <button class="btn btn-danger" v-if="orderDetail?.order?.status === 'completed' && orderDetail?.order?.refund_status !== 'full'" @click="openRefundModal">退款</button>
+          <button class="btn btn-danger" v-if="canExecuteRefund && orderDetail?.order?.status === 'completed' && orderDetail?.order?.refund_status !== 'full'" @click="openRefundModal">退款</button>
         </div>
       </div>
     </div>
@@ -867,7 +869,7 @@ const pageSubtitle = computed(() => {
         </div>
         <div class="detail-footer">
           <button class="btn btn-secondary" @click="showRefundModal = false" :disabled="isRefunding">取消</button>
-          <button class="btn btn-danger" @click="submitRefund" :disabled="isRefunding">{{ isRefunding ? '处理中...' : '确认退款' }}</button>
+          <button v-if="canExecuteRefund" class="btn btn-danger" @click="submitRefund" :disabled="isRefunding">{{ isRefunding ? '处理中...' : '确认退款' }}</button>
         </div>
       </div>
     </div>

@@ -26,7 +26,8 @@ const routes = [
   {
     path: '/settings',
     name: 'SettingsPage',
-    component: SettingsPage
+    component: SettingsPage,
+    meta: { permissions: ['account.view', 'payment.config.view'] }
   },
   {
     path: '/stock-logs',
@@ -48,8 +49,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const required = to.meta?.permission
-  if (!required || !authState.token) return true
-  if (hasPermission(required)) return true
+  const anyOf = Array.isArray(to.meta?.permissions) ? to.meta.permissions : []
+  if ((!required && !anyOf.length) || !authState.token) return true
+  if ((required && hasPermission(required)) || (anyOf.length && anyOf.some(hasPermission))) return true
   return { path: '/', replace: true }
 })
 
