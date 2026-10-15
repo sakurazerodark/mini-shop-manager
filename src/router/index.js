@@ -27,7 +27,7 @@ const routes = [
     path: '/settings',
     name: 'SettingsPage',
     component: SettingsPage,
-    meta: { permissions: ['account.view', 'payment.config.view'] }
+    meta: { permission: 'payment.config.view' }
   },
   {
     path: '/stock-logs',

@@ -171,7 +171,7 @@ const canSeeAccessControl = computed(() => hasPermission('account.view') || hasP
 const canUsePos = computed(() => hasPermission('payment.create'))
 const canManageInventory = computed(() => hasPermission('order.manage'))
 const canViewReports = computed(() => hasPermission('report.view'))
-const canViewSettings = computed(() => hasPermission('account.view') || hasPermission('payment.config.view'))
+const canViewSettings = computed(() => hasPermission('payment.config.view'))
 const displayUserName = computed(() => authState.user?.display_name || authState.user?.name || authState.user?.username || '未登录')
 const displayRoleName = computed(() => authState.user?.role?.name || authState.user?.role_name || (authState.user ? '已登录' : '访客'))
 
