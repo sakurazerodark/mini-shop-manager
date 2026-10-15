@@ -176,7 +176,7 @@ const mapUnionpayRespCode = (respCode) => {
   return c ? 'failed' : null;
 };
 
-const reconcileAlipayOrder = async (orderId, { requestId, purpose } = {}) => {
+const reconcileAlipayOrder = async (orderId, { requestId, purpose, operator } = {}) => {
   const cfg = await getAlipayConfig();
   if (!cfg.appId || !cfg.gateway || !cfg.merchantPrivateKey) return { ok: false, error: '支付宝配置不完整' };
   const local = await dbGet("SELECT id, total_amount FROM orders WHERE id = ?", [String(orderId)]).catch(() => null);
@@ -206,7 +206,7 @@ const reconcileAlipayOrder = async (orderId, { requestId, purpose } = {}) => {
   const paid = status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED';
   if (paid && amountOk) {
     await markOrderPaid({ orderId, provider: 'alipay', tradeNo: resp.trade_no || '', confirmedVia: 'reconcile' });
-    await completePendingOrder(orderId).catch(() => {});
+    await completePendingOrder(orderId, operator || 'system').catch(() => {});
   }
   if (!amountOk) return { ok: false, error: amountMsg, raw: resp };
   return { ok: true, paid, trade_status: status, trade_no: resp.trade_no || '', trace_id: resp.trace_id || '' };

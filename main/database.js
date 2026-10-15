@@ -1,7 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const { baseDataDir } = require('./utils/dir');
 
 const dataDir = baseDataDir;
@@ -248,14 +247,6 @@ function initDb() {
     db.run(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
       SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
       WHERE r.name = 'readonly' AND p.permission_key IN ('account.view','role.view','order.view','payment.record.view','refund.view','report.view','archive.view')`);
-
-    const initialPassword = process.env.ADMIN_PASSWORD || 'admin';
-    const initialSalt = process.env.ADMIN_PASSWORD_SALT || 'mini-shop-admin';
-    const initialHash = `scrypt$${initialSalt}$${crypto.scryptSync(initialPassword, initialSalt, 64).toString('hex')}`;
-    db.run(`INSERT OR IGNORE INTO users (username, password_hash, display_name, status) VALUES ('admin', ?, '管理员', 'active')`, [initialHash]);
-    db.run(`INSERT OR IGNORE INTO user_roles (user_id, role_id)
-      SELECT u.id, r.id FROM users u CROSS JOIN roles r
-      WHERE u.username = 'admin' AND r.name = 'store_owner'`);
 
     db.run(`
       CREATE TABLE IF NOT EXISTS product_price_logs (

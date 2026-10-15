@@ -13,7 +13,11 @@ const tail = (v, n = 8) => {
 exports.reconcileAlipay = async (req, res) => {
   try {
     const orderId = String(req.params.orderId || '').trim();
-    const result = await paymentService.reconcileAlipayOrder(orderId, { requestId: req.requestId, purpose: 'manual_reconcile' });
+    const result = await paymentService.reconcileAlipayOrder(orderId, {
+      requestId: req.requestId,
+      purpose: 'manual_reconcile',
+      operator: req.user?.username || req.user?.display_name || String(req.user?.id || 'system')
+    });
     if (!result.ok) return res.status(400).json({ error: result.error || '对账失败', raw: result.raw });
     res.json({ data: { paid: result.paid, trade_status: result.trade_status || 'UNKNOWN' } });
   } catch (e) {

@@ -46,6 +46,66 @@ const getUserRecord = async (identifier) => dbGet(
   [identifier, String(identifier)]
 );
 
+const getSuperAdminCount = async () => {
+  const row = await dbGet(`SELECT COUNT(DISTINCT u.id) AS count
+    FROM users u
+    JOIN user_roles ur ON ur.user_id = u.id
+    JOIN roles r ON r.id = ur.role_id
+    WHERE r.name = 'store_owner' AND u.status = 'active'`);
+  return Number(row?.count || 0);
+};
+
+const getAuthSetupStatus = async () => {
+  const superAdminCount = await getSuperAdminCount();
+  return {
+    needs_setup: superAdminCount === 0,
+    has_super_admin: superAdminCount > 0,
+    super_admin_count: superAdminCount
+  };
+};
+
+const bootstrapSuperAdmin = async ({ username, password, display_name, email } = {}) => {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername || normalizedUsername.length > 64) {
+    const error = new Error('用户名不能为空且不能超过64个字符');
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+  if (String(password || '').length < 6) {
+    const error = new Error('密码至少需要6个字符');
+    error.code = 'INVALID_INPUT';
+    throw error;
+  }
+
+  // Keep the status check and first user creation in one SQLite transaction so
+  // two simultaneous setup requests cannot both create a super administrator.
+  await dbRun('BEGIN IMMEDIATE');
+  try {
+    if (await getSuperAdminCount() > 0) {
+      const error = new Error('超级管理员已设置');
+      error.code = 'SETUP_COMPLETED';
+      throw error;
+    }
+    const role = await dbGet("SELECT id FROM roles WHERE name = 'store_owner' LIMIT 1");
+    if (!role) {
+      const error = new Error('超级管理员角色不存在');
+      error.code = 'SETUP_UNAVAILABLE';
+      throw error;
+    }
+    const result = await dbRun(
+      `INSERT INTO users (username, password_hash, display_name, email, status, updated_at)
+       VALUES (?, ?, ?, ?, 'active', datetime('now'))`,
+      [normalizedUsername, hashPassword(password), display_name || normalizedUsername, email || null]
+    );
+    await dbRun('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', [result.lastID, role.id]);
+    await dbRun('COMMIT');
+    return publicUser(await getUserById(result.lastID));
+  } catch (error) {
+    await dbRun('ROLLBACK').catch(() => {});
+    throw error;
+  }
+};
+
 const login = async (username, password, metadata = {}) => {
   const record = await getUserRecord(String(username || '').trim());
   if (!record || record.status !== 'active' || !verifyPassword(password, record.password_hash)) {
@@ -152,4 +212,4 @@ const writeAudit = async ({ userId, action, resource, resourceId, details, resul
   await dbRun('INSERT INTO audit_logs (user_id, action, resource, resource_id, details, result, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [userId || null, action, resource || null, resourceId == null ? null : String(resourceId), details ? JSON.stringify(details) : null, result, ip || '', userAgent || '']);
 };
 
-module.exports = { hashPassword, verifyPassword, publicUser, getUserById, login, getSessionUser, revokeSession, listUsers, createUser, updateUser, setUserRoles, listRoles, createRole, updateRole, setRolePermissions, writeAudit };
+module.exports = { hashPassword, verifyPassword, publicUser, getUserById, login, getSessionUser, revokeSession, listUsers, createUser, updateUser, setUserRoles, listRoles, createRole, updateRole, setRolePermissions, writeAudit, getSuperAdminCount, getAuthSetupStatus, bootstrapSuperAdmin };

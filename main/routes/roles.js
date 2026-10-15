@@ -2,21 +2,20 @@ const express = require('express');
 const router = express.Router();
 const authService = require('../services/authService');
 const { dbAll, dbRun } = require('../database');
-const { authenticate, requirePermission } = require('../middleware/auth');
+const { protect, PERMISSIONS } = require('../middleware/permissions');
+const { requireSuperAdmin } = require('../middleware/auth');
 
-router.use(authenticate);
-
-router.get('/permissions', requirePermission('role.view'), async (_req, res) => {
+router.get('/permissions', protect(PERMISSIONS.ROLE_VIEW), async (_req, res) => {
   try { res.json({ data: await dbAll('SELECT id, permission_key, name, description FROM permissions ORDER BY permission_key') }); }
   catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.get('/', requirePermission('role.view'), async (_req, res) => {
+router.get('/', protect(PERMISSIONS.ROLE_VIEW), async (_req, res) => {
   try { res.json({ data: await authService.listRoles() }); }
   catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.get('/:id', requirePermission('role.view'), async (req, res) => {
+router.get('/:id', protect(PERMISSIONS.ROLE_VIEW), async (req, res) => {
   try {
     const role = (await authService.listRoles()).find(item => item.id === Number(req.params.id));
     if (!role) return res.status(404).json({ error: 'Role not found' });
@@ -24,7 +23,7 @@ router.get('/:id', requirePermission('role.view'), async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.get('/:id/permissions', requirePermission('role.view'), async (req, res) => {
+router.get('/:id/permissions', protect(PERMISSIONS.ROLE_VIEW), async (req, res) => {
   try {
     const role = (await authService.listRoles()).find(item => item.id === Number(req.params.id));
     if (!role) return res.status(404).json({ error: 'Role not found' });
@@ -32,7 +31,7 @@ router.get('/:id/permissions', requirePermission('role.view'), async (req, res) 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-router.post('/', requirePermission('role.manage'), async (req, res) => {
+router.post('/', protect(PERMISSIONS.ROLE_MANAGE), requireSuperAdmin, async (req, res) => {
   try {
     const role = await authService.createRole(req.body || {});
     await authService.writeAudit({ userId: req.user.id, action: 'role.create', resource: 'role', resourceId: role.id, details: { name: role.name }, ip: req.ip, userAgent: req.get('user-agent') });
@@ -40,7 +39,7 @@ router.post('/', requirePermission('role.manage'), async (req, res) => {
   } catch (error) { res.status(error.message.includes('UNIQUE') ? 409 : 400).json({ error: error.message }); }
 });
 
-router.put('/:id', requirePermission('role.manage'), async (req, res) => {
+router.put('/:id', protect(PERMISSIONS.ROLE_MANAGE), requireSuperAdmin, async (req, res) => {
   try {
     const role = await authService.updateRole(req.params.id, req.body || {});
     if (!role) return res.status(404).json({ error: 'Role not found' });
@@ -49,18 +48,18 @@ router.put('/:id', requirePermission('role.manage'), async (req, res) => {
   } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
-router.put('/:id/permissions', requirePermission('role.manage'), async (req, res) => {
+router.put('/:id/permissions', protect(PERMISSIONS.ROLE_MANAGE), requireSuperAdmin, async (req, res) => {
   try {
     const role = await authService.updateRole(req.params.id, {
       permission_keys: req.body?.permission_keys || req.body?.permissions || []
     });
     if (!role) return res.status(404).json({ error: 'Role not found' });
-    await authService.writeAudit({ userId: req.user.id, action: 'role.permissions.update', resource: 'role', resourceId: role.id, details: { permission_count: (role.permissions || []).length }, ip: req.ip, userAgent: req.get('user-agent') });
+    await authService.writeAudit({ userId: req.user.id, action: 'role.permissions.update', resource: 'role', resourceId: role.id, details: { permission_count: (role.permissions || []).length, permission_keys: (role.permissions || []).map(item => item.permission_key).filter(Boolean).slice(0, 200) }, ip: req.ip, userAgent: req.get('user-agent') });
     res.json({ data: role });
   } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
-router.delete('/:id', requirePermission('role.manage'), async (req, res) => {
+router.delete('/:id', protect(PERMISSIONS.ROLE_MANAGE), requireSuperAdmin, async (req, res) => {
   try {
     const role = (await authService.listRoles()).find(item => item.id === Number(req.params.id));
     if (!role) return res.status(404).json({ error: 'Role not found' });

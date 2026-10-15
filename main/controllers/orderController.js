@@ -205,7 +205,7 @@ exports.manualPayOrder = async (req, res) => {
     }
 
     await orderService.markOrderPaid({ orderId, provider: 'manual', tradeNo: '', confirmedVia: 'manual' });
-    await orderService.completePendingOrder(orderId);
+    await orderService.completePendingOrder(orderId, req.user?.username || req.user?.display_name || String(req.user?.id || 'system'));
     res.json({ message: '订单已手动转为支付完成', order_id: orderId });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -214,7 +214,7 @@ exports.manualPayOrder = async (req, res) => {
 
 exports.completeOrder = async (req, res) => {
   try {
-    await orderService.completePendingOrder(req.params.id);
+    await orderService.completePendingOrder(req.params.id, req.user?.username || req.user?.display_name || String(req.user?.id || 'system'));
     res.json({ message: '订单已完成', order_id: req.params.id });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -232,7 +232,8 @@ exports.submitOrder = (req, res) => {
     
     const insertItem = "INSERT INTO order_items (order_id, product_id, quantity, unit_price, cost_price) VALUES (?, ?, ?, ?, ?)";
     const updateStock = "UPDATE products SET stock = stock - ? WHERE id = ?";
-    const insertStockLog = "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'sell', ?, ?, ?, 'system')";
+    const insertStockLog = "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'sell', ?, ?, ?, ?)";
+    const operator = req.user?.username || req.user?.display_name || (req.user?.id ? String(req.user.id) : 'system');
 
     db.get("SELECT value FROM settings WHERE key = 'costing_mode'", [], async (mErr, mRow) => {
       if (mErr) {
@@ -255,7 +256,7 @@ exports.submitOrder = (req, res) => {
 
           await dbRunAsync(insertItem, [order_id, item.product_id, qty, unitPrice, unitCost]);
           await dbRunAsync(updateStock, [qty, item.product_id]);
-          await dbRunAsync(insertStockLog, [item.product_id, -qty, unitCost, unitPrice]);
+          await dbRunAsync(insertStockLog, [item.product_id, -qty, unitCost, unitPrice, operator]);
 
           if (mode === 'fifo') {
             await productService.recalcAvgCostFromBatches(item.product_id).catch(() => {});

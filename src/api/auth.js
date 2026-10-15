@@ -29,6 +29,19 @@ export const login = async (credentials) => {
   }
 }
 
+// Public endpoints used before a session exists. The server may return either
+// the data object directly or wrapped in `{ data }`, so callers can consume
+// both forms consistently.
+export const getAuthStatus = async () => {
+  const payload = await request.get('/auth/status')
+  return unwrap(payload) || {}
+}
+
+export const bootstrapSuperAdmin = async (credentials) => {
+  const payload = await request.post('/auth/bootstrap', credentials)
+  return applySession(payload)
+}
+
 export const getCurrentUser = async () => {
   const payload = await request.get('/auth/me')
   return applySession(payload)

@@ -3,6 +3,8 @@ const productService = require('../services/productService');
 const settingService = require('../services/settingService');
 const { saveBase64Image } = require('../utils/file');
 
+const getOperator = (req) => req.user?.username || req.user?.display_name || (req.user?.id ? String(req.user.id) : 'system');
+
 exports.lookupBarcode = async (req, res) => {
   try {
     const data = await productService.lookupBarcode(req.params.barcode);
@@ -116,7 +118,7 @@ exports.addProduct = (req, res) => {
             }
             db.run(
               "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'init', ?, ?, ?, ?)",
-              [productId, initialStock, Number(cost_price || 0), Number(retail_price || 0), 'system']
+              [productId, initialStock, Number(cost_price || 0), Number(retail_price || 0), getOperator(req)]
             );
             db.run("COMMIT", (commitErr) => {
               if (commitErr) return res.status(500).json({ error: commitErr.message });
@@ -221,7 +223,7 @@ exports.reportProductLoss = (req, res) => {
         db.run(updateStock, [qty, productId]);
         db.run(
           "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'loss', ?, ?, ?, ?)",
-          [productId, -qty, unitCost, null, reason || 'system']
+          [productId, -qty, unitCost, null, getOperator(req)]
         );
 
         if (mode === 'fifo') {
@@ -282,7 +284,7 @@ exports.restockProduct = (req, res) => {
 
         await dbRunAsync(
           "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'restock', ?, ?, ?, ?)",
-          [productId, addQty, inCost, nextRetail, reason || 'system']
+          [productId, addQty, inCost, nextRetail, getOperator(req)]
         );
 
         await productService.insertPriceLog({ productId, priceType: 'last_cost', oldPrice: oldLastCost, newPrice: nextLastCost, reason });
@@ -355,7 +357,7 @@ exports.adjustProductStock = (req, res) => {
 
           await dbRunAsync(
             "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'adjust', ?, ?, ?, ?)",
-            [productId, diff, unitCost, retail, reason || 'system']
+            [productId, diff, unitCost, retail, getOperator(req)]
           );
 
           await productService.insertPriceLog({ productId, priceType: 'avg_cost', oldPrice: oldAvgCost, newPrice: nextAvgCost, reason });

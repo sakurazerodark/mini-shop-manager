@@ -3,18 +3,23 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Toast from './components/Toast.vue'
 import { getBasicSettings } from './api/settings'
-import { login, getCurrentUser, logout } from './api/auth'
+import { login, getCurrentUser, logout, getAuthStatus, bootstrapSuperAdmin } from './api/auth'
 import { authState, clearAuthSession, globalStoreName as storeName, hasPermission } from './store'
 
 const route = useRoute()
 const router = useRouter()
 
 const isSidebarCollapsed = ref(false)
-const showLogin = ref(false)
 const loginForm = ref({ username: '', password: '' })
 const loginError = ref('')
+const setupForm = ref({ username: '', display_name: '', password: '', confirm_password: '' })
+const setupError = ref('')
+const authMode = ref('login')
+const authReady = ref(false)
+const setupSubmitting = ref(false)
 
 const fetchStoreName = async () => {
+  if (!authState.token) return
   try {
     const res = await getBasicSettings().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))
     if (res.ok) {
@@ -28,15 +33,48 @@ const fetchStoreName = async () => {
   }
 }
 
-onMounted(() => {
-  if (!authState.token) {
+const readAuthStatus = (status) => {
+  const value = status?.data ?? status ?? {}
+  const hasSuperAdmin = value.hasSuperAdmin ?? value.has_super_admin ?? value.superAdminExists ?? value.super_admin_exists
+  const needsSetup = value.needsBootstrap ?? value.needs_bootstrap ?? value.setupRequired ?? value.setup_required
+  if (needsSetup !== undefined) return Boolean(needsSetup)
+  if (hasSuperAdmin !== undefined) return !Boolean(hasSuperAdmin)
+  if (value.initialized !== undefined) return !Boolean(value.initialized)
+  return false
+}
+
+const initializeAuth = async () => {
+  authReady.value = false
+  try {
+    const status = await getAuthStatus()
+    if (!authState.token) {
+      authMode.value = readAuthStatus(status) ? 'setup' : 'login'
+      authState.initialized = true
+      return
+    }
+
+    try {
+      await getCurrentUser()
+      authState.initialized = true
+      await fetchStoreName()
+    } catch {
+      clearAuthSession()
+      authMode.value = readAuthStatus(status) ? 'setup' : 'login'
+    }
+  } catch (error) {
+    // A status failure should not block the local login screen. The login or
+    // setup request will show the server's actionable error if unavailable.
     authState.initialized = true
-    showLogin.value = true
+    authMode.value = authState.token ? 'login' : 'login'
+    console.error('获取认证状态失败', error)
+  } finally {
+    authReady.value = true
   }
+}
+
+onMounted(() => {
+  initializeAuth()
   fetchStoreName()
-  if (authState.token) {
-    getCurrentUser().catch(() => { authState.initialized = true })
-  }
   window.addEventListener('auth:error', handleAuthError)
 })
 onUnmounted(() => window.removeEventListener('auth:error', handleAuthError))
@@ -46,7 +84,7 @@ const handleAuthError = (event) => {
   if (status === 401) {
     clearAuthSession()
     authState.sessionExpired = true
-    showLogin.value = true
+    authMode.value = 'login'
     loginError.value = '登录状态已失效，请重新登录'
   } else if (status === 403) {
     window.$toast?.('当前账号没有执行此操作的权限', 'error')
@@ -57,15 +95,53 @@ const submitLogin = async () => {
   loginError.value = ''
   try {
     await login(loginForm.value)
-    showLogin.value = false
+    await fetchStoreName()
     window.$toast?.('登录成功', 'success')
   } catch (error) {
     loginError.value = error?.error || error?.message || '登录失败，请检查账号和密码'
   }
 }
 
+const submitBootstrap = async () => {
+  setupError.value = ''
+  const form = setupForm.value
+  if (!form.username.trim() || !form.password) {
+    setupError.value = '请填写超级管理员账号和密码'
+    return
+  }
+  if (form.password.length < 6) {
+    setupError.value = '密码至少需要6个字符'
+    return
+  }
+  if (form.password !== form.confirm_password) {
+    setupError.value = '两次输入的密码不一致'
+    return
+  }
+
+  setupSubmitting.value = true
+  try {
+    const payload = await bootstrapSuperAdmin({
+      username: form.username.trim(),
+      display_name: form.display_name.trim() || form.username.trim(),
+      password: form.password
+    })
+    // Bootstrap can return a session for immediate access. Older servers may
+    // only return the created user, in which case perform a normal login.
+    if (!authState.token) await login({ username: form.username.trim(), password: form.password })
+    await fetchStoreName()
+    authMode.value = 'login'
+    window.$toast?.('超级管理员已设置', 'success')
+  } catch (error) {
+    setupError.value = error?.error || error?.message || '初始化失败，请稍后重试'
+  } finally {
+    setupSubmitting.value = false
+  }
+}
+
 const handleLogout = async () => {
   await logout()
+  authMode.value = 'login'
+  loginForm.value = { username: '', password: '' }
   window.$toast?.('已退出登录', 'success')
 }
 const isMobileNavOpen = ref(false)
@@ -106,7 +182,7 @@ const setView = (path) => {
 </script>
 
 <template>
-  <div class="app-layout" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'mobile-nav-open': isMobileNavOpen }">
+  <div v-if="authReady && authState.token && authState.user" class="app-layout" :class="{ 'sidebar-collapsed': isSidebarCollapsed, 'mobile-nav-open': isMobileNavOpen }">
     <div class="mobile-topbar">
       <button class="mobile-menu-btn" @click="isMobileNavOpen = true" aria-label="打开菜单">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -216,8 +292,7 @@ const setView = (path) => {
             <div class="status">● {{ displayRoleName }}</div>
           </div>
           <div class="profile-actions">
-            <button v-if="!authState.user" class="profile-btn" @click="showLogin = true">登录</button>
-            <button v-else class="profile-btn" @click="handleLogout">退出</button>
+            <button class="profile-btn" @click="handleLogout">退出</button>
           </div>
         </div>
         <div class="user-profile collapsed" v-show="isSidebarCollapsed">
@@ -246,19 +321,47 @@ const setView = (path) => {
       </button>
     </div>
 
-    <!-- 全局提示组件 -->
-    <Toast />
-
-    <div v-if="showLogin" class="login-backdrop" @click.self="showLogin = false">
-      <form class="login-modal" @submit.prevent="submitLogin">
-        <div class="login-head"><div><p class="login-eyebrow">MiniShop</p><h2>登录管理后台</h2></div><button type="button" class="login-close" @click="showLogin = false">×</button></div>
-        <p v-if="loginError" class="login-error">{{ loginError }}</p>
-        <label>账号<input v-model="loginForm.username" class="form-input" autocomplete="username" required /></label>
-        <label>密码<input v-model="loginForm.password" class="form-input" type="password" autocomplete="current-password" required /></label>
-        <button class="btn btn-primary login-submit" :disabled="authState.loading">{{ authState.loading ? '登录中…' : '登录' }}</button>
-      </form>
-    </div>
   </div>
+
+  <main v-else-if="authReady" class="auth-screen">
+    <section class="auth-panel">
+      <div class="auth-brand"><span class="auth-brand-mark">M</span><span>MiniShop</span></div>
+      <template v-if="authMode === 'setup'">
+        <div class="auth-heading">
+          <p class="auth-eyebrow">首次使用</p>
+          <h1>设置超级管理员</h1>
+          <p>请创建唯一的超级管理员账号，之后其他账号由超级管理员统一维护。</p>
+        </div>
+        <form class="auth-form" @submit.prevent="submitBootstrap">
+          <p v-if="setupError" class="login-error">{{ setupError }}</p>
+          <label>管理员账号<input v-model="setupForm.username" class="form-input" autocomplete="username" required autofocus /></label>
+          <label>显示名称<span class="optional-label">（可选）</span><input v-model="setupForm.display_name" class="form-input" autocomplete="name" /></label>
+          <label>密码<input v-model="setupForm.password" class="form-input" type="password" autocomplete="new-password" minlength="6" required /></label>
+          <label>确认密码<input v-model="setupForm.confirm_password" class="form-input" type="password" autocomplete="new-password" minlength="6" required /></label>
+          <button class="btn btn-primary login-submit" :disabled="setupSubmitting">{{ setupSubmitting ? '设置中…' : '完成设置' }}</button>
+        </form>
+      </template>
+      <template v-else>
+        <div class="auth-heading">
+          <p class="auth-eyebrow">门店管理后台</p>
+          <h1>欢迎回来</h1>
+          <p>登录后继续管理商品、订单和门店设置。</p>
+        </div>
+        <form class="auth-form" @submit.prevent="submitLogin">
+          <p v-if="loginError" class="login-error">{{ loginError }}</p>
+          <label>账号<input v-model="loginForm.username" class="form-input" autocomplete="username" required autofocus /></label>
+          <label>密码<input v-model="loginForm.password" class="form-input" type="password" autocomplete="current-password" required /></label>
+          <button class="btn btn-primary login-submit" :disabled="authState.loading">{{ authState.loading ? '登录中…' : '登录' }}</button>
+        </form>
+      </template>
+      <p class="auth-footer">账号由超级管理员管理</p>
+    </section>
+  </main>
+  <main v-else class="auth-screen auth-loading" aria-busy="true">
+    <div class="auth-loading-mark">M</div>
+    <p>正在检查系统状态…</p>
+  </main>
+  <Toast />
 </template>
 
 <style>
@@ -642,6 +745,58 @@ body, html {
   width: 100%;
   margin-top: 3px;
 }
+
+/* 认证首屏 */
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 18px;
+  background: #eef2ff;
+}
+
+.auth-panel {
+  width: min(460px, 100%);
+  padding: 34px;
+  background: var(--surface);
+  border: 1px solid #dbe4ff;
+  border-radius: 12px;
+  box-shadow: 0 18px 55px rgba(30, 41, 59, 0.14);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.auth-brand-mark,
+.auth-loading-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--primary);
+  font-weight: 900;
+}
+
+.auth-heading { margin: 34px 0 22px; }
+.auth-heading h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: 0; }
+.auth-heading p:last-child { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.auth-eyebrow { margin: 0 0 8px; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-form label { display: flex; flex-direction: column; gap: 7px; color: var(--text-main); font-size: 13px; font-weight: 700; }
+.optional-label { color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.auth-footer { margin: 22px 0 0; color: var(--text-muted); font-size: 12px; text-align: center; }
+.auth-loading { color: var(--text-muted); gap: 12px; }
+.auth-loading-mark { width: 44px; height: 44px; }
+.auth-loading p { margin: 0; font-size: 13px; }
 
 /* 主内容区 */
 .main-content {

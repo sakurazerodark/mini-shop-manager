@@ -23,7 +23,7 @@ const cancelPendingOrder = async (orderId) => {
   await dbRun("UPDATE orders SET status = 'canceled', pay_status = 'canceled' WHERE id = ? AND status IN ('pending', 'abnormal')", [orderId]);
 };
 
-const completePendingOrder = async (orderId) => {
+const completePendingOrder = async (orderId, operator = 'system') => {
   const order = await dbGet("SELECT * FROM orders WHERE id = ?", [orderId]);
   if (!order) throw new Error('订单不存在');
   if (order.status === 'completed' && order.pay_status === 'paid') return;
@@ -50,8 +50,8 @@ const completePendingOrder = async (orderId) => {
       await dbRun("UPDATE order_items SET cost_price = ? WHERE id = ?", [unitCost, item.id]);
       await dbRun("UPDATE products SET stock = stock - ? WHERE id = ?", [qty, item.product_id]);
       await dbRun(
-        "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'sell', ?, ?, ?, 'system')",
-        [item.product_id, -qty, unitCost, unitPrice]
+        "INSERT INTO stock_logs (product_id, change_type, change_qty, unit_cost_price, unit_retail_price, operator) VALUES (?, 'sell', ?, ?, ?, ?)",
+        [item.product_id, -qty, unitCost, unitPrice, operator || 'system']
       );
 
       if (mode === 'fifo') {

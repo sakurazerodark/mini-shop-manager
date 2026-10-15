@@ -27,6 +27,13 @@ const requirePermission = (permission) => async (req, res, next) => {
   return res.status(403).json({ error: '没有执行该操作的权限', code: 'FORBIDDEN', required_permission: permission });
 };
 
+const requireSuperAdmin = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: '需要登录', code: 'AUTH_REQUIRED' });
+  const isSuperAdmin = (req.user.roles || []).some((role) => role && role.name === 'store_owner');
+  if (isSuperAdmin || (req.user.permissions || []).includes('*')) return next();
+  return res.status(403).json({ error: '仅超级管理员可执行该操作', code: 'SUPER_ADMIN_REQUIRED' });
+};
+
 const optionalAuthenticate = async (req, res, next) => {
   try {
     const token = getBearer(req);
@@ -38,4 +45,4 @@ const optionalAuthenticate = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getBearer, authenticate, requirePermission, optionalAuthenticate };
+module.exports = { getBearer, authenticate, requirePermission, requireSuperAdmin, optionalAuthenticate };
