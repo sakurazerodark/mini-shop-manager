@@ -29,7 +29,8 @@
     "npmRebuild": false,
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "MiniShop_Setup_${version}.${ext}"
     },
     "publish": {
       "provider": "github",
