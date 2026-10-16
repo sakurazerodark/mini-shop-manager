@@ -1,16 +1,36 @@
 ; Preserve runtime data while removing the installed application files.
 ; Do not force-kill the desktop app during uninstall. A running process can
 ; keep native modules and the database open, leaving a partial uninstall.
-!ifndef nsProcess::FindProcess
-  !include "nsProcess.nsh"
+!macro abortIfMiniShopRunningFunction
+check_process:
+  nsExec::Exec `%SYSTEMROOT%\System32\cmd.exe /c tasklist /FI "IMAGENAME eq ${APP_FILENAME}.exe" /FO csv | %SYSTEMROOT%\System32\find.exe /I "${APP_FILENAME}.exe"`
+  Pop $R0
+  StrCmp "$R0" "0" 0 app_not_running
+
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "MiniShop is still running. Exit it, then click Retry. Click Cancel to abort uninstall." IDRETRY check_process IDCANCEL abort_uninstall
+  Return
+app_not_running:
+  Return
+abort_uninstall:
+  Quit
+!macroend
+
+!ifdef BUILD_UNINSTALLER
+  Function un.abortIfMiniShopRunning
+    !insertmacro abortIfMiniShopRunningFunction
+  FunctionEnd
+!else
+  Function abortIfMiniShopRunning
+    !insertmacro abortIfMiniShopRunningFunction
+  FunctionEnd
 !endif
 
 !macro abortIfMiniShopRunning
-  ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
-  ${if} $R0 == 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "MiniShop is still running. Please exit it before uninstalling."
-    Quit
-  ${endIf}
+  !ifdef BUILD_UNINSTALLER
+    Call un.abortIfMiniShopRunning
+  !else
+    Call abortIfMiniShopRunning
+  !endif
 !macroend
 
 !macro customCheckAppRunning
