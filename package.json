@@ -30,11 +30,18 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sakurazerodark",
+      "repo": "mini-shop-manager",
+      "releaseType": "release"
     }
   },
   "dependencies": {
     "axios": "^1.15.0",
     "cors": "^2.8.6",
+    "electron-updater": "^6.8.9",
     "express": "^5.2.1",
     "sqlite3": "^6.0.1",
     "supertest": "^7.2.2",

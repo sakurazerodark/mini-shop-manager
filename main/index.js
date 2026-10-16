@@ -1,8 +1,91 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const path = require('path');
 const { startServer } = require('./server');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
+let updateCheckPromise = null;
+const releaseUrl = 'https://github.com/sakurazerodark/mini-shop-manager/releases';
+
+function sendUpdateEvent(channel, payload = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function configureAutoUpdater() {
+  ipcMain.handle('update:version', () => ({
+    currentVersion: app.getVersion(),
+    supported: app.isPackaged
+  }));
+  ipcMain.handle('update:open-release', () => shell.openExternal(releaseUrl));
+
+  ipcMain.handle('update:check', async () => {
+    if (!app.isPackaged) {
+      return { status: 'development', currentVersion: app.getVersion() };
+    }
+    if (updateCheckPromise) return updateCheckPromise;
+
+    updateCheckPromise = autoUpdater.checkForUpdates()
+      .then((result) => ({
+        status: 'checking',
+        currentVersion: app.getVersion(),
+        latestVersion: result?.updateInfo?.version || ''
+      }))
+      .catch((error) => {
+        sendUpdateEvent('update:error', { message: error?.message || String(error) });
+        throw new Error(error?.message || 'Unable to check for updates');
+      })
+      .finally(() => {
+        updateCheckPromise = null;
+      });
+    return updateCheckPromise;
+  });
+
+  ipcMain.handle('update:download', async () => {
+    if (!app.isPackaged) return { status: 'development' };
+    await autoUpdater.downloadUpdate();
+    return { status: 'downloading' };
+  });
+
+  ipcMain.handle('update:install', () => {
+    if (!app.isPackaged) return { status: 'development' };
+    autoUpdater.quitAndInstall();
+    return { status: 'installing' };
+  });
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => sendUpdateEvent('update:checking'));
+  autoUpdater.on('update-available', (info) => sendUpdateEvent('update:available', {
+    version: info?.version || '',
+    releaseDate: info?.releaseDate || '',
+    releaseNotes: info?.releaseNotes || ''
+  }));
+  autoUpdater.on('update-not-available', (info) => sendUpdateEvent('update:not-available', {
+    version: info?.version || app.getVersion()
+  }));
+  autoUpdater.on('download-progress', (progress) => sendUpdateEvent('update:progress', {
+    percent: Number(progress?.percent || 0),
+    transferred: progress?.transferred || 0,
+    total: progress?.total || 0
+  }));
+  autoUpdater.on('update-downloaded', (info) => sendUpdateEvent('update:downloaded', {
+    version: info?.version || ''
+  }));
+  autoUpdater.on('error', (error) => sendUpdateEvent('update:error', {
+    message: error?.message || String(error)
+  }));
+}
+
+function checkForUpdatesOnStartup() {
+  if (!app.isPackaged) return;
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      sendUpdateEvent('update:error', { message: error?.message || String(error) });
+    });
+  }, 5000);
+}
 
 function setAppMenu() {
   const isMac = process.platform === 'darwin';
@@ -125,9 +208,12 @@ async function createWindow() {
     // 生产环境加载构建好的 Vue 静态文件
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
+
+  mainWindow.webContents.once('did-finish-load', checkForUpdatesOnStartup);
 }
 
 app.whenReady().then(() => {
+  configureAutoUpdater();
   setAppMenu();
   createWindow();
 

@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getBasicSettings, updateBasicSettings, getBarcodeLookup, updateBarcodeLookup, getPayments, updatePayments, getDataDir, selectDataDir, migrateDataDir, getNetworkConfig, updateNetworkConfig, getDefaultPassword, updateDefaultPassword } from '../api/settings'
 import { lookupBarcode } from '../api/products'
 import { globalStoreName, hasPermission } from '../store'
+import { updater } from '../utils/updater'
 
 const currentTab = ref('basic') // 'basic', 'payment'
 const paymentTab = ref('general')
@@ -17,6 +18,89 @@ const canManageAccounts = computed(() => hasPermission('account.manage'))
 const currentDataDir = ref('')
 const isElectron = ref(false)
 const isMigratingData = ref(false)
+
+const updateStatus = ref('idle')
+const updateMessage = ref('')
+const currentVersion = ref('')
+const latestVersion = ref('')
+const updateProgress = ref(0)
+const updateSupported = ref(false)
+const updateBusy = ref(false)
+
+const updateListeners = {
+  checking: () => {
+    updateStatus.value = 'checking'
+    updateMessage.value = '正在检查 GitHub Releases...'
+  },
+  available: (info = {}) => {
+    updateStatus.value = 'available'
+    latestVersion.value = info.version || ''
+    updateMessage.value = latestVersion.value ? `发现新版本 ${latestVersion.value}` : '发现新版本'
+  },
+  notAvailable: () => {
+    updateStatus.value = 'latest'
+    updateMessage.value = '当前已是最新版本'
+  },
+  progress: (info = {}) => {
+    updateStatus.value = 'downloading'
+    updateProgress.value = Math.max(0, Math.min(100, Number(info.percent || 0)))
+    updateMessage.value = `正在下载更新 ${updateProgress.value.toFixed(0)}%`
+  },
+  downloaded: (info = {}) => {
+    updateStatus.value = 'downloaded'
+    latestVersion.value = info.version || latestVersion.value
+    updateProgress.value = 100
+    updateMessage.value = '更新已下载，重启后安装'
+  },
+  error: (info = {}) => {
+    updateStatus.value = 'error'
+    updateMessage.value = info.message || '检查更新失败，请稍后重试'
+  }
+}
+
+const checkForUpdates = async () => {
+  if (!updater.isSupported || updateBusy.value) return
+  updateBusy.value = true
+  updateStatus.value = 'checking'
+  updateMessage.value = '正在检查 GitHub Releases...'
+  try {
+    const result = await updater.invoke('update:check')
+    if (result?.currentVersion) currentVersion.value = result.currentVersion
+    if (result?.status === 'development') {
+      updateStatus.value = 'development'
+      updateMessage.value = '开发环境不执行更新检查'
+    }
+  } catch (error) {
+    updateListeners.error({ message: error?.message || '检查更新失败，请稍后重试' })
+  } finally {
+    updateBusy.value = false
+  }
+}
+
+const downloadUpdate = async () => {
+  if (updateBusy.value) return
+  updateBusy.value = true
+  try {
+    await updater.invoke('update:download')
+    updateStatus.value = 'downloading'
+    updateMessage.value = '正在下载更新...'
+  } catch (error) {
+    updateListeners.error({ message: error?.message || '下载更新失败，请稍后重试' })
+  } finally {
+    updateBusy.value = false
+  }
+}
+
+const installUpdate = async () => {
+  try {
+    await updater.invoke('update:install')
+  } catch (error) {
+    updateListeners.error({ message: error?.message || '安装更新失败，请稍后重试' })
+  }
+}
+
+const openReleasePage = () => updater.invoke('update:open-release')
+const updateListenerRefs = []
 
 const networkConfig = ref({ remote_access: false, local_ip: '127.0.0.1', port: 8080 })
 const isSavingNetwork = ref(false)
@@ -402,9 +486,32 @@ const runTest = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchSettings()
   fetchPaymentSettings()
+  if (!updater.isSupported) return
+  updateSupported.value = true
+  const version = await updater.invoke('update:version').catch(() => null)
+  currentVersion.value = version?.currentVersion || ''
+  updateSupported.value = version?.supported !== false
+  if (!updateSupported.value) {
+    updateStatus.value = 'development'
+    updateMessage.value = '开发环境不执行更新检查'
+  }
+  Object.entries({
+    'update:checking': updateListeners.checking,
+    'update:available': updateListeners.available,
+    'update:not-available': updateListeners.notAvailable,
+    'update:progress': updateListeners.progress,
+    'update:downloaded': updateListeners.downloaded,
+    'update:error': updateListeners.error
+  }).forEach(([channel, listener]) => {
+    updateListenerRefs.push({ channel, listener: updater.on(channel, listener) })
+  })
+})
+
+onUnmounted(() => {
+  updateListenerRefs.forEach(({ channel, listener }) => updater.off(channel, listener))
 })
 </script>
 
@@ -423,6 +530,34 @@ onMounted(() => {
 
     <!-- 基础设置 -->
     <div class="grid" v-if="currentTab === 'basic'">
+      <section class="card update-card" v-if="isElectron">
+        <div class="card-head">
+          <div class="card-title">应用更新</div>
+          <div class="badge" :class="updateStatus === 'available' || updateStatus === 'downloaded' ? 'ok' : updateStatus === 'error' ? 'warn' : ''">
+            {{ updateStatus === 'available' || updateStatus === 'downloaded' ? '有新版本' : updateStatus === 'latest' ? '已是最新' : 'GitHub Releases' }}
+          </div>
+        </div>
+        <div class="form">
+          <div class="update-version-row">
+            <span>当前版本</span>
+            <strong>{{ currentVersion || '读取中...' }}</strong>
+          </div>
+          <div class="update-message" :class="{ 'update-error': updateStatus === 'error' }">
+            {{ updateMessage || '从 GitHub Releases 检查桌面版更新' }}
+          </div>
+          <div v-if="updateStatus === 'downloading'" class="update-progress">
+            <div class="update-progress-bar" :style="{ width: `${updateProgress}%` }"></div>
+          </div>
+          <div class="actions update-actions">
+            <button class="btn btn-secondary" @click="openReleasePage">打开发布页</button>
+            <button v-if="updateStatus === 'available'" class="btn btn-primary" @click="downloadUpdate" :disabled="updateBusy">下载更新</button>
+            <button v-else-if="updateStatus === 'downloaded'" class="btn btn-primary" @click="installUpdate">重启安装</button>
+            <button v-else class="btn btn-primary" @click="checkForUpdates" :disabled="updateBusy || !updateSupported">
+              {{ updateBusy || updateStatus === 'checking' ? '检查中...' : '检查更新' }}
+            </button>
+          </div>
+        </div>
+      </section>
       <section class="card" v-if="isElectron">
         <div class="card-head">
           <div class="card-title">网络与局域网访问</div>
@@ -974,6 +1109,51 @@ onMounted(() => {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   padding: 18px;
+}
+
+.update-card {
+  grid-column: 1 / -1;
+}
+
+.update-version-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.update-version-row strong {
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.update-message {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.update-error {
+  color: var(--danger);
+}
+
+.update-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-alt);
+}
+
+.update-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.update-actions {
+  gap: 10px;
 }
 
 .card-head {
