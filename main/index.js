@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./server');
 const { revokeAllSessions } = require('./services/authService');
-const { syncLegacyDataDir } = require('./utils/dir');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
@@ -76,7 +75,6 @@ function requestQuit() {
   quitPromise = revokeAllSessions()
     .catch(() => {})
     .then(() => clearRendererAuth())
-    .then(() => syncLegacyDataDir())
     .finally(() => app.quit());
 }
 

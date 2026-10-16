@@ -63,8 +63,6 @@ function startServer() {
 
     const server = app.listen(PORT, host, () => {
       logger.info('server started', { port: PORT, host });
-      // Preserve the active install-directory data before a future reinstall.
-      require('./utils/dir').syncLegacyDataDir();
       const { reconcileAlipayOrder } = require('./services/paymentService');
 
       setInterval(async () => {
