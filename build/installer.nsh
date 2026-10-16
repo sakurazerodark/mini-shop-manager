@@ -1,15 +1,24 @@
 ; Preserve runtime data while removing the installed application files.
 ; Do not force-kill the desktop app during uninstall. A running process can
 ; keep native modules and the database open, leaving a partial uninstall.
-!macro customCheckAppRunning
-  !insertmacro FIND_PROCESS "${APP_EXECUTABLE_FILENAME}" $R0
+!ifndef nsProcess::FindProcess
+  !include "nsProcess.nsh"
+!endif
+
+!macro abortIfMiniShopRunning
+  ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
   ${if} $R0 == 0
     MessageBox MB_OK|MB_ICONEXCLAMATION "MiniShop is still running. Please exit it before uninstalling."
     Quit
   ${endIf}
 !macroend
 
+!macro customCheckAppRunning
+  !insertmacro abortIfMiniShopRunning
+!macroend
+
 !macro customRemoveFiles
+  !insertmacro abortIfMiniShopRunning
   StrCpy $R8 ""
   IfFileExists "$INSTDIR\data\*.*" 0 +2
     Rename "$INSTDIR\data" "$PLUGINSDIR\preserved-install-data"
