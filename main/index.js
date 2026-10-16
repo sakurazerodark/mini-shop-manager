@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, Tray, nativeImage, dialog, shell, ipcMain } = 
 const path = require('path');
 const fs = require('fs');
 const { startServer } = require('./server');
+const { revokeAllSessions } = require('./services/authService');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
@@ -71,7 +72,10 @@ const clearRendererAuth = async () => {
 function requestQuit() {
   if (isQuitting) return;
   isQuitting = true;
-  quitPromise = clearRendererAuth().finally(() => app.quit());
+  quitPromise = revokeAllSessions()
+    .catch(() => {})
+    .then(() => clearRendererAuth())
+    .finally(() => app.quit());
 }
 
 function showClosePrompt() {
@@ -139,6 +143,7 @@ function configureAutoUpdater() {
   ipcMain.handle('update:install', async () => {
     if (!app.isPackaged) return { status: 'development' };
     isQuitting = true;
+    await revokeAllSessions().catch(() => {});
     await clearRendererAuth();
     autoUpdater.quitAndInstall();
     return { status: 'installing' };

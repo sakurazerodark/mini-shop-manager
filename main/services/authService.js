@@ -173,6 +173,10 @@ const revokeSession = async (token) => {
   if (token) await dbRun('UPDATE sessions SET revoked_at = datetime(\'now\') WHERE token_hash = ?', [tokenHash(token)]);
 };
 
+const revokeAllSessions = async () => {
+  await dbRun('UPDATE sessions SET revoked_at = datetime(\'now\') WHERE revoked_at IS NULL');
+};
+
 const revokeUserSessions = async (userId, exceptToken = '') => {
   if (exceptToken) {
     await dbRun(
@@ -315,6 +319,7 @@ module.exports = {
   login,
   getSessionUser,
   revokeSession,
+  revokeAllSessions,
   revokeUserSessions,
   changePassword,
   listUsers,
