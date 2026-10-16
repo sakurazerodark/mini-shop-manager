@@ -34,7 +34,7 @@ const showResetPassword = ref(false)
 const editingUser = ref(null)
 const editingRole = ref(null)
 const resettingUser = ref(null)
-const userForm = ref({ username: '', display_name: '', password: '', role_id: '', enabled: true })
+const userForm = ref({ username: '', display_name: '', password: '', role_ids: [], enabled: true })
 const resetPasswordForm = ref({ password: '', confirm_password: '' })
 const roleForm = ref({ name: '', description: '' })
 
@@ -118,13 +118,16 @@ const refresh = async () => {
 
 const openNewUser = () => {
   editingUser.value = null
-  userForm.value = { username: '', display_name: '', password: '', role_id: roles.value[0]?.id || '', enabled: true }
+  userForm.value = { username: '', display_name: '', password: '', role_ids: [], enabled: true }
   showUserForm.value = true
 }
 
 const openEditUser = (user) => {
   editingUser.value = user
-  userForm.value = { username: user.username || '', display_name: user.display_name || user.name || '', password: '', role_id: user.role_id || user.role?.id || '', enabled: user.enabled !== false && user.status !== 'disabled' }
+  const roleIds = Array.isArray(user.roles)
+    ? user.roles.map(role => Number(role.id)).filter(Number.isInteger)
+    : (user.role_id || user.role?.id ? [Number(user.role_id || user.role.id)] : [])
+  userForm.value = { username: user.username || '', display_name: user.display_name || user.name || '', password: '', role_ids: roleIds, enabled: user.enabled !== false && user.status !== 'disabled' }
   showUserForm.value = true
 }
 
@@ -161,7 +164,7 @@ const saveUser = async () => {
       username: userForm.value.username.trim(),
       display_name: userForm.value.display_name.trim(),
       status: userForm.value.enabled ? 'active' : 'disabled',
-      role_ids: userForm.value.role_id ? [Number(userForm.value.role_id)] : []
+      role_ids: [...new Set((userForm.value.role_ids || []).map(Number).filter(Number.isInteger))]
     }
     if (userForm.value.password) payload.password = userForm.value.password
     if (editingUser.value) await updateUser(editingUser.value.id, payload)
@@ -252,6 +255,12 @@ const saveRolePermissions = async () => {
 }
 
 const permissionChecked = (code) => rolePermissions.value.includes(code)
+const roleChecked = (roleId) => (userForm.value.role_ids || []).includes(Number(roleId))
+const toggleUserRole = (roleId) => {
+  const id = Number(roleId)
+  const current = userForm.value.role_ids || []
+  userForm.value.role_ids = roleChecked(id) ? current.filter(item => Number(item) !== id) : [...current, id]
+}
 const togglePermission = (code) => {
   rolePermissions.value = permissionChecked(code)
     ? rolePermissions.value.filter(item => item !== code)
@@ -322,7 +331,7 @@ onMounted(refresh)
       </template>
     </section>
 
-    <div v-if="showUserForm" class="modal-backdrop" @click.self="showUserForm = false"><form class="access-modal" @submit.prevent="saveUser"><div class="modal-head"><h2>{{ editingUser ? '编辑账号' : '新增账号' }}</h2><button type="button" class="icon-btn" @click="showUserForm = false">×</button></div><label>登录账号<input v-model="userForm.username" class="form-input" required /></label><label>显示姓名<input v-model="userForm.display_name" class="form-input" /></label><label>密码<input v-model="userForm.password" class="form-input" type="password" :placeholder="editingUser ? '留空表示不修改' : '留空使用默认密码'" :required="false" /></label><label>角色<select v-model="userForm.role_id" class="form-input"><option value="">未分配</option><option v-for="role in roles" :key="role.id" :value="role.id">{{ getRoleDisplayName(role) }}</option></select></label><label class="check-line"><input v-model="userForm.enabled" type="checkbox" />账号启用</label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showUserForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
+    <div v-if="showUserForm" class="modal-backdrop" @click.self="showUserForm = false"><form class="access-modal" @submit.prevent="saveUser"><div class="modal-head"><h2>{{ editingUser ? '编辑账号' : '新增账号' }}</h2><button type="button" class="icon-btn" @click="showUserForm = false">×</button></div><label>登录账号<input v-model="userForm.username" class="form-input" required /></label><label>显示姓名<input v-model="userForm.display_name" class="form-input" /></label><label>密码<input v-model="userForm.password" class="form-input" type="password" :placeholder="editingUser ? '留空表示不修改' : '留空使用默认密码'" :required="false" /></label><fieldset class="role-picker"><legend>角色</legend><label v-for="role in roles" :key="role.id" class="check-line"><input type="checkbox" :checked="roleChecked(role.id)" @change="toggleUserRole(role.id)" />{{ getRoleDisplayName(role) }}</label><span v-if="!roles.length" class="muted">暂无可用角色</span></fieldset><label class="check-line"><input v-model="userForm.enabled" type="checkbox" />账号启用</label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showUserForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
     <div v-if="showResetPassword" class="modal-backdrop" @click.self="showResetPassword = false"><form class="access-modal" @submit.prevent="submitResetPassword"><div class="modal-head"><h2>重置密码</h2><button type="button" class="icon-btn" @click="showResetPassword = false">×</button></div><p class="muted">账号：{{ resettingUser?.username }}</p><label>新密码<input v-model="resetPasswordForm.password" class="form-input" type="password" minlength="6" placeholder="留空使用默认密码" /></label><label v-if="resetPasswordForm.password">确认新密码<input v-model="resetPasswordForm.confirm_password" class="form-input" type="password" minlength="6" required /></label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showResetPassword = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '提交中…' : '确认重置' }}</button></div></form></div>
     <div v-if="showRoleForm" class="modal-backdrop" @click.self="showRoleForm = false"><form class="access-modal" @submit.prevent="saveRole"><div class="modal-head"><h2>{{ editingRole ? '编辑角色' : '新增角色' }}</h2><button type="button" class="icon-btn" @click="showRoleForm = false">×</button></div><label>角色名称<input v-model="roleForm.name" class="form-input" required /></label><label>描述<textarea v-model="roleForm.description" class="form-input" rows="3"></textarea></label><div class="modal-actions"><button type="button" class="btn btn-secondary" @click="showRoleForm = false">取消</button><button class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存' }}</button></div></form></div>
   </div>
@@ -371,6 +380,9 @@ h1 { margin:0; font-size:28px; letter-spacing:0; }
 .modal-backdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:20px; background:rgba(15,23,42,.45); }
 .access-modal { width:min(460px,100%); display:flex; flex-direction:column; gap:14px; padding:22px; background:var(--surface); border-radius:10px; box-shadow:var(--shadow-lg); }
 .access-modal label { display:flex; flex-direction:column; gap:7px; font-size:13px; font-weight:700; }
+.role-picker { display:flex; flex-direction:column; gap:8px; margin:0; padding:0; border:0; }
+.role-picker legend { margin-bottom:2px; font-size:13px; font-weight:700; }
+.role-picker .check-line { flex-direction:row; align-items:center; font-weight:500; }
 .modal-head { display:flex; align-items:center; justify-content:space-between; }
 .modal-head h2 { margin:0; font-size:18px; }
 .icon-btn { border:0; background:none; color:var(--text-muted); font-size:24px; cursor:pointer; line-height:1; }

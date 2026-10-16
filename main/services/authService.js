@@ -262,7 +262,9 @@ const setUserRoles = async (userId, roleIds) => {
 };
 
 const listRoles = async () => {
-  const roles = await dbAll('SELECT id, name, description, built_in, created_at, updated_at FROM roles ORDER BY built_in DESC, name');
+  const roles = await dbAll(`SELECT r.id, r.name, r.description, r.built_in, r.created_at, r.updated_at,
+    (SELECT COUNT(DISTINCT ur.user_id) FROM user_roles ur JOIN users u ON u.id = ur.user_id WHERE ur.role_id = r.id) AS user_count
+    FROM roles r ORDER BY r.built_in DESC, r.name`);
   for (const role of roles) role.permissions = (await dbAll('SELECT p.id, p.permission_key, p.name, p.description FROM permissions p JOIN role_permissions rp ON rp.permission_id = p.id WHERE rp.role_id = ? ORDER BY p.permission_key', [role.id]));
   return roles;
 };
