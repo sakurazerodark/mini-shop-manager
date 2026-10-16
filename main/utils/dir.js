@@ -71,6 +71,35 @@ const migrateLegacyDataDir = (preferredDir) => {
   }
 };
 
+const getLegacyDataDir = () => {
+  if (!isElectron || !electronApp.isPackaged) return null;
+  return path.join(electronApp.getPath('userData'), 'data');
+};
+
+// Keep a copy outside the install directory so uninstall/reinstall can restore
+// the current database and uploaded files. The install directory remains the
+// active location; this copy is only a recovery source.
+const syncLegacyDataDir = (activeDir = baseDataDir) => {
+  const legacyDir = getLegacyDataDir();
+  const defaultDir = getDefaultDataDir();
+  if (!legacyDir || !activeDir || path.resolve(activeDir) !== path.resolve(defaultDir)) return false;
+
+  const activeDb = path.join(activeDir, 'shop.db');
+  if (!fs.existsSync(activeDb)) return false;
+
+  const legacyDb = path.join(legacyDir, 'shop.db');
+  try {
+    const activeStat = fs.statSync(activeDb);
+    const legacyStat = fs.existsSync(legacyDb) ? fs.statSync(legacyDb) : null;
+    if (legacyStat && legacyStat.mtimeMs >= activeStat.mtimeMs) return false;
+    fs.mkdirSync(legacyDir, { recursive: true });
+    fs.cpSync(activeDir, legacyDir, { recursive: true, force: true });
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
 if (!baseDataDir) {
   const preferredDir = migrateLegacyDataDir(getDefaultDataDir());
   baseDataDir = canUseDataDir(preferredDir)
@@ -87,5 +116,7 @@ module.exports = {
   baseDataDir,
   setCustomDataDir,
   getAppConfig,
-  setAppConfig
+  setAppConfig,
+  getLegacyDataDir,
+  syncLegacyDataDir
 };
