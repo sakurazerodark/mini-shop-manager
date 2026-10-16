@@ -48,6 +48,12 @@ const filteredUsers = computed(() => {
   return users.value.filter(user => [user.username, user.display_name, user.name].filter(Boolean).join(' ').toLowerCase().includes(query))
 })
 
+const roleUserCount = (role) => {
+  const serverCount = Number(role?.user_count ?? role?.userCount)
+  const loadedCount = users.value.filter(user => (user.roles || []).some(item => Number(item.id) === Number(role?.id))).length
+  return Math.max(Number.isFinite(serverCount) ? serverCount : 0, loadedCount)
+}
+
 const unwrapList = (payload, key) => {
   const data = payload?.data ?? payload
   if (Array.isArray(data)) return data
@@ -320,7 +326,7 @@ onMounted(refresh)
       <template v-else>
         <div class="role-list">
           <div class="panel-toolbar"><strong>角色</strong><button v-if="canManageRoles" class="btn btn-primary btn-small" @click="openNewRole">新增</button></div>
-          <button v-for="role in roles" :key="role.id" class="role-row" :class="{ selected: selectedRoleId === role.id }" @click="selectedRoleId = role.id; loadRolePermissions(role.id)"><span><strong>{{ getRoleDisplayName(role) }}</strong><small>{{ role.description || '暂无描述' }}</small></span><span class="role-count">{{ role.user_count ?? role.userCount ?? 0 }}人</span></button>
+          <button v-for="role in roles" :key="role.id" class="role-row" :class="{ selected: selectedRoleId === role.id }" @click="selectedRoleId = role.id; loadRolePermissions(role.id)"><span><strong>{{ getRoleDisplayName(role) }}</strong><small>{{ role.description || '暂无描述' }}</small></span><span class="role-count">{{ roleUserCount(role) }}人</span></button>
           <div v-if="!roles.length" class="empty-state compact">暂无角色</div>
         </div>
         <div class="permission-panel">
