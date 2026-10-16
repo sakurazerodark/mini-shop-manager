@@ -16,7 +16,7 @@ const isSavingDefaultPassword = ref(false)
 const canManageAccounts = computed(() => hasPermission('account.manage'))
 
 const currentDataDir = ref('')
-const isElectron = ref(false)
+const isElectron = ref(updater.isSupported)
 const isMigratingData = ref(false)
 
 const updateStatus = ref('idle')
@@ -159,7 +159,7 @@ const fetchSettings = async () => {
     if (resDataDir.ok) {
       const jsonDir = await resDataDir.json()
       currentDataDir.value = jsonDir?.data?.path || ''
-      isElectron.value = jsonDir?.data?.is_electron || false
+      isElectron.value = updater.isSupported || Boolean(jsonDir?.data?.is_electron)
     }
 
     const res = await getBarcodeLookup().then(data => ({ ok: true, json: () => Promise.resolve(data) })).catch(e => ({ ok: false, json: () => Promise.resolve(e) }))

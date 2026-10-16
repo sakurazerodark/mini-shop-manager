@@ -50,10 +50,10 @@ router.get('/barcode_lookup', protect(PERMISSIONS.ACCOUNT_VIEW), settingControll
 router.put('/barcode_lookup', protect(PERMISSIONS.ACCOUNT_MANAGE), settingController.updateBarcodeLookup);
 router.get('/payments', protect(PERMISSIONS.PAYMENT_CONFIG_VIEW), settingController.getPayments);
 router.put('/payments', protect(paymentSettingsPermissions), settingController.updatePayments);
-router.get('/data_dir', protect(PERMISSIONS.ACCOUNT_VIEW), settingController.getDataDir);
-router.post('/data_dir/select', protect(PERMISSIONS.ACCOUNT_MANAGE), settingController.selectDataDir);
-router.post('/data_dir/migrate', protect(PERMISSIONS.ACCOUNT_MANAGE), settingController.migrateDataDir);
-router.get('/network', protect(PERMISSIONS.ACCOUNT_VIEW), settingController.getNetworkConfig);
-router.put('/network', protect(PERMISSIONS.ACCOUNT_MANAGE), settingController.updateNetworkConfig);
+router.get('/data_dir', protect(PERMISSIONS.PAYMENT_CONFIG_VIEW), settingController.getDataDir);
+router.post('/data_dir/select', protect(PERMISSIONS.PAYMENT_CONFIG_MANAGE), settingController.selectDataDir);
+router.post('/data_dir/migrate', protect(PERMISSIONS.PAYMENT_CONFIG_MANAGE), settingController.migrateDataDir);
+router.get('/network', protect(PERMISSIONS.PAYMENT_CONFIG_VIEW), settingController.getNetworkConfig);
+router.put('/network', protect(PERMISSIONS.PAYMENT_CONFIG_MANAGE), settingController.updateNetworkConfig);
 
 module.exports = router;
