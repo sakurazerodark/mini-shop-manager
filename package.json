@@ -23,6 +23,7 @@
     "files": [
       "dist/**/*",
       "main/**/*",
+      "public/app.ico",
       "package.json"
     ],
     "asar": true,

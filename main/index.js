@@ -1,11 +1,99 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { startServer } = require('./server');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
+let tray;
+let isQuitting = false;
+let closePromptVisible = false;
+let quitPromise = null;
 let updateCheckPromise = null;
 const releaseUrl = 'https://github.com/sakurazerodark/mini-shop-manager/releases';
+
+const getTrayIcon = () => {
+  const candidates = [
+    path.join(app.getAppPath(), 'public', 'app.ico'),
+    path.join(__dirname, '..', 'public', 'app.ico'),
+    path.join(process.resourcesPath || '', 'public', 'app.ico')
+  ];
+  const iconPath = candidates.find((candidate) => fs.existsSync(candidate));
+  return iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+};
+
+const showMainWindow = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+};
+
+const createTray = () => {
+  if (tray) return;
+  tray = new Tray(getTrayIcon());
+  tray.setToolTip(app.name);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开 MiniShop', click: showMainWindow },
+    { type: 'separator' },
+    { label: '退出应用', click: requestQuit }
+  ]));
+  tray.on('click', showMainWindow);
+};
+
+const hideToTray = () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.hide();
+};
+
+const clearRendererAuth = async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const logoutUrl = `http://127.0.0.1:${process.env.PORT || 8080}/api/auth/logout`;
+  const script = `(async () => {
+    const token = localStorage.getItem('mini-shop-auth-token');
+    if (token) {
+      try {
+        await Promise.race([
+          fetch(${JSON.stringify(logoutUrl)}, { method: 'POST', headers: { Authorization: 'Bearer ' + token } }),
+          new Promise(resolve => setTimeout(resolve, 800))
+        ]);
+      } catch (_) {}
+    }
+    localStorage.removeItem('mini-shop-auth-token');
+    localStorage.removeItem('mini-shop-auth-user');
+    localStorage.removeItem('mini-shop-auth-permissions');
+  })()`;
+  try {
+    await mainWindow.webContents.executeJavaScript(script, true);
+  } catch (_) {}
+};
+
+function requestQuit() {
+  if (isQuitting) return;
+  isQuitting = true;
+  quitPromise = clearRendererAuth().finally(() => app.quit());
+}
+
+function showClosePrompt() {
+  if (closePromptVisible || isQuitting || !mainWindow || mainWindow.isDestroyed()) return;
+  closePromptVisible = true;
+  dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '关闭 MiniShop',
+    message: '请选择关闭方式',
+    detail: '最小化到托盘后，仍可从系统托盘重新打开应用。',
+    buttons: ['关闭应用', '最小化到托盘', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  }).then(({ response }) => {
+    closePromptVisible = false;
+    if (response === 0) requestQuit();
+    else if (response === 1) hideToTray();
+  }).catch(() => {
+    closePromptVisible = false;
+  });
+}
 
 function sendUpdateEvent(channel, payload = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -48,8 +136,10 @@ function configureAutoUpdater() {
     return { status: 'downloading' };
   });
 
-  ipcMain.handle('update:install', () => {
+  ipcMain.handle('update:install', async () => {
     if (!app.isPackaged) return { status: 'development' };
+    isQuitting = true;
+    await clearRendererAuth();
     autoUpdater.quitAndInstall();
     return { status: 'installing' };
   });
@@ -102,13 +192,13 @@ function setAppMenu() {
         { role: 'hideOthers', label: '隐藏其他' },
         { role: 'unhide', label: '全部显示' },
         { type: 'separator' },
-        { role: 'quit', label: '退出 ' + app.name }
+        { label: '退出 ' + app.name, click: showClosePrompt }
       ]
     }] : []),
     {
       label: '文件',
       submenu: [
-        isMac ? { role: 'close', label: '关闭' } : { role: 'quit', label: '退出' }
+        isMac ? { role: 'close', label: '关闭' } : { label: '退出', click: showClosePrompt }
       ]
     },
     {
@@ -194,6 +284,15 @@ async function createWindow() {
       contextIsolation: false
     }
   });
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    showClosePrompt();
+  });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+  createTray();
 
   // 根据环境变量判断是开发环境还是生产环境
   if (process.env.NODE_ENV === 'development') {
@@ -214,8 +313,15 @@ app.whenReady().then(() => {
   createWindow();
 
   app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
+    else createWindow();
   });
+});
+
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
+  event.preventDefault();
+  requestQuit();
 });
 
 app.on('window-all-closed', function () {
