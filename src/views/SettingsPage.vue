@@ -141,9 +141,23 @@ const payment = ref({
 const paymentStatus = ref(null)
 const isSavingPayment = ref(false)
 const pollIntervalSec = ref(2)
+const defaultCashierShortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
+const defaultPaymentShortcuts = ['F5', 'F6', 'F7', 'F8', 'F9']
+const normalizePaymentPreferencesForUi = (input = {}) => {
+  const source = input && typeof input === 'object' ? input : {}
+  return {
+    ...source,
+    default_method: source.default_method || 'alipay_dynamic_qr',
+    shortcuts: { ...defaultCashierShortcuts, ...(source.shortcuts || {}) },
+    methods: (Array.isArray(source.methods) ? source.methods : []).map((method, index) => ({
+      ...method,
+      shortcut: method.shortcut || defaultPaymentShortcuts[index] || ''
+    }))
+  }
+}
 const paymentPreferences = ref({
   default_method: 'alipay_dynamic_qr',
-  shortcuts: { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' },
+  shortcuts: { ...defaultCashierShortcuts },
   methods: []
 })
 const cashierShortcutFields = [
@@ -162,9 +176,9 @@ const captureShortcut = (event, target, field) => {
   else if (/^[a-z0-9]$/i.test(key)) target[field] = key.toUpperCase()
 }
 const resetCashierShortcuts = () => {
-  paymentPreferences.value.shortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
+  paymentPreferences.value.shortcuts = { ...defaultCashierShortcuts }
   paymentPreferences.value.methods.forEach((method, index) => {
-    method.shortcut = ['F5', 'F6', 'F7', 'F8', 'F9'][index] || ''
+    method.shortcut = defaultPaymentShortcuts[index] || ''
   })
 }
 
@@ -224,7 +238,7 @@ const fetchPaymentSettings = async () => {
     if (!res.ok) return
     const json = await res.json()
     paymentStatus.value = json?.data || null
-    paymentPreferences.value = json?.data?.payment_preferences || { default_method: 'alipay_dynamic_qr', methods: [] }
+    paymentPreferences.value = normalizePaymentPreferencesForUi(json?.data?.payment_preferences)
     pollIntervalSec.value = Math.max(1, Math.floor(Number(paymentStatus.value?.poll_interval_ms || 2000) / 1000))
     payment.value.wechatpay_v3.mchid = paymentStatus.value?.wechatpay_v3?.mchid || ''
     payment.value.wechatpay_v3.appid = paymentStatus.value?.wechatpay_v3?.appid || ''
@@ -968,7 +982,7 @@ onUnmounted(() => {
                   <div class="payment-preference-actions">
                     <label class="shortcut-editor" title="按下键盘按键设置快捷键">
                       <span>快捷键</span>
-                      <input :value="shortcutLabel(method.shortcut)" readonly @keydown.prevent="captureShortcut($event, method, 'shortcut')" />
+                      <input :value="shortcutLabel(method.shortcut)" readonly title="点击后按下要使用的按键" aria-label="收款方式快捷键" @keydown.stop.prevent="captureShortcut($event, method, 'shortcut')" />
                     </label>
                     <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="movePaymentMethod(index, -1)" title="上移">上移</button>
                     <button class="btn btn-secondary" type="button" :disabled="index === paymentPreferences.methods.length - 1" @click="movePaymentMethod(index, 1)" title="下移">下移</button>
@@ -993,7 +1007,7 @@ onUnmounted(() => {
                     <strong>{{ field.label }}</strong>
                     <small>{{ field.hint }}</small>
                   </span>
-                  <input :value="shortcutLabel(paymentPreferences.shortcuts?.[field.key])" readonly @keydown.prevent="captureShortcut($event, paymentPreferences.shortcuts, field.key)" />
+                  <input :value="shortcutLabel(paymentPreferences.shortcuts?.[field.key])" readonly title="点击后按下要使用的按键" :aria-label="`${field.label}快捷键`" @keydown.stop.prevent="captureShortcut($event, paymentPreferences.shortcuts, field.key)" />
                 </label>
               </div>
               <div class="hint">点击输入框后按下一个按键即可修改；快捷键不能重复。</div>

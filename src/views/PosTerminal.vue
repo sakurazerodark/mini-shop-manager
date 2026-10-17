@@ -10,14 +10,27 @@ const barcodeInputRef = ref(null)
 const cart = ref([])
 const paymentMethod = ref('alipay_dynamic_qr')
 const paymentConfig = ref(null)
+const defaultCashierShortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
+const defaultPaymentShortcuts = ['F5', 'F6', 'F7', 'F8', 'F9']
+const normalizePaymentPreferencesForUi = (input = {}) => {
+  const source = input && typeof input === 'object' ? input : {}
+  return {
+    ...source,
+    default_method: source.default_method || 'alipay_dynamic_qr',
+    shortcuts: { ...defaultCashierShortcuts, ...(source.shortcuts || {}) },
+    methods: (Array.isArray(source.methods) ? source.methods : []).map((method, index) => ({
+      ...method,
+      shortcut: method.shortcut || defaultPaymentShortcuts[index] || ''
+    }))
+  }
+}
 const paymentPreferences = ref({
   default_method: 'alipay_dynamic_qr',
-  shortcuts: { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' },
+  shortcuts: { ...defaultCashierShortcuts },
   methods: []
 })
 const scanMode = ref('product')
 
-const defaultCashierShortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
 const cashierShortcuts = computed(() => ({ ...defaultCashierShortcuts, ...(paymentPreferences.value?.shortcuts || {}) }))
 const shortcutForAction = (name) => cashierShortcuts.value[name]
 const shortcutLabel = (value) => value === 'Escape' ? 'ESC' : (value || '')
@@ -169,7 +182,7 @@ const fetchPaymentConfig = async () => {
     if (!res.ok) return
     const json = await res.json()
     paymentConfig.value = json?.data || null
-    paymentPreferences.value = json?.data?.payment_preferences || paymentPreferences.value
+    paymentPreferences.value = normalizePaymentPreferencesForUi(json?.data?.payment_preferences || paymentPreferences.value)
   } catch (e) {
     console.error(e)
   }
