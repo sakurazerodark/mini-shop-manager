@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import QRCode from 'qrcode'
 import { getProductByBarcode } from '../api/products'
 import { getPayments } from '../api/settings'
 import { createPendingOrder, cancelOrder, getOrder, completeOrder } from '../api/orders'
@@ -57,9 +58,17 @@ let payPollTimer = null
 let payPollStartedAt = 0
 let payGatewayLastQueryAt = 0
 
-const alipayQrImg = computed(() => {
-  if (!alipayQrCode.value) return ''
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(alipayQrCode.value)}`
+const alipayQrImg = ref('')
+watch(alipayQrCode, async (code) => {
+  alipayQrImg.value = ''
+  if (!code) return
+
+  try {
+    const image = await QRCode.toDataURL(code, { width: 240, margin: 1 })
+    if (alipayQrCode.value === code) alipayQrImg.value = image
+  } catch (error) {
+    console.error('failed to generate alipay qr code:', error)
+  }
 })
 
 const getUploadUrl = (url) => {
