@@ -647,7 +647,12 @@ const handleGlobalKeydown = (e) => {
         barcodeInput.value = barcodeBuffer
         handleScan()
       }
-    } else if (matchesShortcut(e.key, shortcutForAction('checkout')) && !isBarcodeEntry && !showPayOverlay.value && !showWeightModal.value && !isTextEntry) {
+    } else if (
+      matchesShortcut(e.key, shortcutForAction('checkout')) &&
+      !showPayOverlay.value &&
+      !showWeightModal.value &&
+      (!isBarcodeEntry || (!barcodeBuffer && !barcodeInput.value.trim()))
+    ) {
       e.preventDefault()
       checkout()
     }
