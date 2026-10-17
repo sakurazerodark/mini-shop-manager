@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { getTodayStats, getRecentOrders, getOrders, manualPayOrder as apiManualPayOrder, cancelOrder as apiCancelOrder, getOrder, refundOrder } from '../api/orders'
+import { getTodayStats, getRecentOrders, getOrders, getBusinessAnalysis, manualPayOrder as apiManualPayOrder, cancelOrder as apiCancelOrder, getOrder, refundOrder } from '../api/orders'
 import { formatDateTime } from '../utils/format'
 import { hasPermission } from '../store'
 
@@ -17,6 +17,22 @@ const canExecuteRefund = computed(() => hasPermission('refund.execute'))
     refund_orders: 0
   })
 const recentOrders = ref([])
+
+const analysisDays = ref(7)
+const analysisLoading = ref(false)
+const analysisData = ref({ summary: { total_orders: 0, total_revenue: 0, total_refunds: 0 }, daily: [], top_products: [] })
+
+const fetchAnalysis = async () => {
+  analysisLoading.value = true
+  try {
+    const result = await getBusinessAnalysis(analysisDays.value)
+    analysisData.value = result?.data || analysisData.value
+  } catch (error) {
+    window.$toast?.(error?.error || '获取经营分析失败', 'error')
+  } finally {
+    analysisLoading.value = false
+  }
+}
 
 // Orders
 const allOrders = ref([])
@@ -206,6 +222,7 @@ const cancelAbnormalOrder = (orderId) => {
 
 const loadData = () => {
   if (currentTab.value === 'dashboard') fetchDashboard()
+  else if (currentTab.value === 'analysis') fetchAnalysis()
   else if (currentTab.value === 'orders') fetchOrders(ordersPage.value)
   else if (currentTab.value === 'payments') fetchPayments(paymentsPage.value)
   else if (currentTab.value === 'abnormal') fetchAbnormal(abnormalPage.value)
@@ -382,6 +399,7 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'orders') return '订单明细'
   if (currentTab.value === 'payments') return '支付记录'
   if (currentTab.value === 'abnormal') return '异常订单'
+  if (currentTab.value === 'analysis') return '经营分析'
   return '营业大盘'
 })
 
@@ -389,6 +407,7 @@ const pageSubtitle = computed(() => {
   if (currentTab.value === 'orders') return '查看所有交易订单'
   if (currentTab.value === 'payments') return '查看三方支付网关状态与对账信息'
   if (currentTab.value === 'abnormal') return '超过1小时未完成的异常订单，可人工干预处理'
+  if (currentTab.value === 'analysis') return '按近 7 天或近 30 天查看流水趋势和热销商品'
   return '实时监控今日门店营业数据'
 })
 </script>
@@ -515,6 +534,23 @@ const pageSubtitle = computed(() => {
             </tbody>
           </table>
         </div>
+      </div>
+    </template>
+
+    <template v-else-if="currentTab === 'analysis'">
+      <div class="analysis-toolbar">
+        <div><span class="analysis-label">分析周期</span><button class="period-btn" :class="{ active: analysisDays === 7 }" @click="analysisDays = 7; fetchAnalysis()">近 7 天</button><button class="period-btn" :class="{ active: analysisDays === 30 }" @click="analysisDays = 30; fetchAnalysis()">近 30 天</button></div>
+        <span class="analysis-updated" v-if="analysisLoading">加载中…</span>
+      </div>
+      <div class="dashboard-grid analysis-summary">
+        <div class="stat-card highlight"><div class="stat-label">期间流水</div><div class="stat-value"><span class="currency">¥</span>{{ Number(analysisData.summary.total_revenue || 0).toFixed(2) }}</div></div>
+        <div class="stat-card"><div class="stat-label">完成订单</div><div class="stat-value">{{ analysisData.summary.total_orders }} <span class="unit">笔</span></div></div>
+        <div class="stat-card"><div class="stat-label">退款金额</div><div class="stat-value"><span class="currency">¥</span>{{ Number(analysisData.summary.total_refunds || 0).toFixed(2) }}</div></div>
+        <div class="stat-card"><div class="stat-label">客单价</div><div class="stat-value"><span class="currency">¥</span>{{ analysisData.summary.total_orders ? (analysisData.summary.total_revenue / analysisData.summary.total_orders).toFixed(2) : '0.00' }}</div></div>
+      </div>
+      <div class="analysis-columns">
+        <section class="recent-orders-card"><div class="card-header"><h3 class="card-title">流水情况</h3><span class="muted-text">按天汇总</span></div><div class="table-container"><table class="data-table"><thead><tr><th>日期</th><th>订单数</th><th>流水</th><th>退款</th></tr></thead><tbody><tr v-for="day in analysisData.daily" :key="day.date"><td>{{ day.date }}</td><td>{{ day.orders }} 笔</td><td class="order-amount">¥ {{ day.revenue.toFixed(2) }}</td><td>¥ {{ day.refunds.toFixed(2) }}</td></tr><tr v-if="!analysisData.daily.length"><td colspan="4"><div class="empty-state"><p>暂无流水数据</p></div></td></tr></tbody></table></div></section>
+        <section class="recent-orders-card"><div class="card-header"><h3 class="card-title">热销商品</h3><span class="muted-text">销量前 10</span></div><div class="table-container"><table class="data-table"><thead><tr><th>排名</th><th>商品</th><th>销量</th><th>销售额</th></tr></thead><tbody><tr v-for="(product, index) in analysisData.top_products" :key="product.product_id"><td><span class="rank-number">{{ index + 1 }}</span></td><td><strong>{{ product.name }}</strong></td><td>{{ product.quantity }} {{ product.unit }}</td><td class="order-amount">¥ {{ product.revenue.toFixed(2) }}</td></tr><tr v-if="!analysisData.top_products.length"><td colspan="4"><div class="empty-state"><p>暂无热销商品数据</p></div></td></tr></tbody></table></div></section>
       </div>
     </template>
 
@@ -902,6 +938,13 @@ const pageSubtitle = computed(() => {
   flex-direction: column;
   gap: 24px;
 }
+
+.analysis-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.analysis-label { color: #64748b; font-size: 13px; margin-right: 10px; }
+.period-btn { border: 1px solid #cbd5e1; background: #fff; color: #475569; padding: 8px 14px; cursor: pointer; }
+.period-btn:first-of-type { border-radius: 6px 0 0 6px; }.period-btn:last-of-type { border-radius: 0 6px 6px 0; margin-left: -1px; }.period-btn.active { color: #fff; background: var(--primary); border-color: var(--primary); }
+.analysis-updated, .muted-text { color: #94a3b8; font-size: 13px; }.analysis-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }.rank-number { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 700; }.analysis-summary { margin-bottom: 20px; }
+@media (max-width: 900px) { .analysis-columns { grid-template-columns: 1fr; } }
 
 .header-bar {
   display: flex;

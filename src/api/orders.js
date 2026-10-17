@@ -1,6 +1,7 @@
 import request from './request'
 
 export const getTodayStats = () => request.get('/reports/today')
+export const getBusinessAnalysis = (days = 7) => request.get('/reports/analysis', { params: { days } })
 export const getRecentOrders = () => request.get('/orders/recent')
 export const getOrders = (params) => request.get('/orders', { params })
 export const getOrder = (id) => request.get(`/orders/${encodeURIComponent(id)}`)

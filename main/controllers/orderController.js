@@ -46,6 +46,75 @@ exports.getTodayReport = (req, res) => {
   });
 };
 
+exports.getBusinessAnalysis = async (req, res) => {
+  const requestedDays = Number.parseInt(req.query.days, 10);
+  const days = requestedDays === 30 ? 30 : 7;
+  const startAt = `-${days} days`;
+  try {
+    const summary = await dbGetAsync(
+      `SELECT
+        COUNT(id) AS total_orders,
+        COALESCE(SUM(total_amount), 0) AS total_revenue,
+        COALESCE(SUM(refunded_amount), 0) AS total_refunds
+       FROM orders
+       WHERE status = 'completed' AND created_at >= datetime('now', ?)`,
+      [startAt]
+    );
+    const daily = await dbAllAsync(
+      `SELECT
+        date(created_at) AS date,
+        COUNT(id) AS orders,
+        COALESCE(SUM(total_amount), 0) AS revenue,
+        COALESCE(SUM(refunded_amount), 0) AS refunds
+       FROM orders
+       WHERE status = 'completed' AND created_at >= datetime('now', ?)
+       GROUP BY date(created_at)
+       ORDER BY date ASC`,
+      [startAt]
+    );
+    const topProducts = await dbAllAsync(
+      `SELECT
+        oi.product_id,
+        COALESCE(p.name, '已删除商品') AS name,
+        COALESCE(p.unit, '') AS unit,
+        COALESCE(SUM(oi.quantity), 0) AS quantity,
+        COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS revenue
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE o.status = 'completed' AND o.created_at >= datetime('now', ?)
+       GROUP BY oi.product_id, p.name, p.unit
+       ORDER BY quantity DESC, revenue DESC
+       LIMIT 10`,
+      [startAt]
+    );
+    res.json({
+      data: {
+        days,
+        summary: {
+          total_orders: Number(summary?.total_orders || 0),
+          total_revenue: Number(summary?.total_revenue || 0),
+          total_refunds: Number(summary?.total_refunds || 0)
+        },
+        daily: (daily || []).map(item => ({
+          ...item,
+          orders: Number(item.orders || 0),
+          revenue: Number(item.revenue || 0),
+          refunds: Number(item.refunds || 0)
+        })),
+        top_products: (topProducts || []).map(item => ({
+          ...item,
+          quantity: Number(item.quantity || 0),
+          revenue: Number(item.revenue || 0)
+        }))
+      }
+    });
+  } catch (error) {
+    logger.error(`query business analysis failed: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getOrders = (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const requestedPageSize = parseInt(req.query.pageSize ?? req.query.limit, 10) || 20;

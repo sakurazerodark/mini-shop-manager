@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getProducts, getDeletedProducts, getProductByBarcode, lookupBarcode, createProduct, updateProduct, deleteProduct as apiDeleteProduct, restoreProduct, productLoss, productRestock, productAdjust, getProductLogs, updateProductPrices, getProductPriceLogs } from '../api/products'
 import { formatDateTime } from '../utils/format'
-import { getSuppliers, createSupplier, deleteSupplier as apiDeleteSupplier } from '../api/suppliers'
+import { getSuppliers } from '../api/suppliers'
 import { getBarcodeLookup, updateBarcodeLookup, getCostingMode, updateCostingMode } from '../api/settings'
 
 const products = ref([])
@@ -48,6 +48,14 @@ const filteredProducts = computed(() => {
 })
 
 const suppliers = ref([])
+const supplierSearch = ref('')
+const supplierMenuOpen = ref(false)
+const filteredSuppliers = computed(() => {
+  const query = supplierSearch.value.trim().toLowerCase()
+  if (!query) return suppliers.value
+  return suppliers.value.filter(item => String(item.name || '').toLowerCase().includes(query))
+})
+const selectedSupplierNames = computed(() => suppliers.value.filter(item => newProduct.value.supplier_ids.includes(item.id)).map(item => item.name))
 const filteredDeletedProducts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   if (!query) return deletedProducts.value
@@ -75,56 +83,6 @@ const fetchSuppliers = async () => {
     }
   } catch (e) {
     console.error('获取供应商失败', e)
-  }
-}
-
-// 供应商管理弹窗
-const showSupplierModal = ref(false)
-const newSupplier = ref({ name: '', contact: '', phone: '', address: '' })
-
-const addSupplier = async () => {
-  if (!newSupplier.value.name) return window.$toast('请输入供应商名称', 'warning')
-  try {
-    const res = await createSupplier(newSupplier.value).then(data => ({ ok: true, text: () => Promise.resolve('{}') })).catch(e => ({ ok: false, text: () => Promise.resolve(JSON.stringify(e)) }))
-    if (res.ok) {
-      window.$toast('添加供应商成功', 'success')
-      newSupplier.value = { name: '', contact: '', phone: '', address: '' }
-      fetchSuppliers()
-    } else {
-      const text = await res.text()
-      try {
-        const data = JSON.parse(text)
-        window.$toast(data.error || '添加失败', 'error')
-      } catch {
-        window.$toast('添加失败：服务端异常', 'error')
-      }
-    }
-  } catch (e) {
-    console.error(e)
-    window.$toast('网络错误', 'error')
-  }
-}
-
-const deleteSupplier = async (id) => {
-  const confirmed = await showConfirm('确定删除此供应商吗？')
-  if (!confirmed) return
-  try {
-    const res = await apiDeleteSupplier(id).then(data => ({ ok: true, text: () => Promise.resolve('{}') })).catch(e => ({ ok: false, text: () => Promise.resolve(JSON.stringify(e)) }))
-    if (res.ok) {
-      window.$toast('删除成功', 'success')
-      fetchSuppliers()
-    } else {
-      const text = await res.text()
-      try {
-        const data = JSON.parse(text)
-        window.$toast(data.error || '删除失败', 'error')
-      } catch {
-        window.$toast('删除失败：服务端异常', 'error')
-      }
-    }
-  } catch (e) {
-    console.error(e)
-    window.$toast('网络错误', 'error')
   }
 }
 
@@ -335,7 +293,8 @@ const openEditProduct = (p) => {
   editingProductId.value = p.id
   let sIds = []
   try {
-    if (p.supplier_ids) sIds = JSON.parse(p.supplier_ids)
+    if (Array.isArray(p.supplier_ids)) sIds = p.supplier_ids
+    else if (p.supplier_ids) sIds = JSON.parse(p.supplier_ids)
   } catch (e) {
     console.error('Failed to parse supplier_ids', e)
   }
@@ -615,17 +574,14 @@ onMounted(() => {
 <template>
   <div class="inventory-container">
     <div class="header-bar">
-      <h2 class="page-title">{{ viewMode === 'list' ? '商品与库存管理' : (viewMode === 'deleted' ? '已删除商品' : '新增商品') }}</h2>
+      <h2 class="page-title">{{ viewMode === 'list' ? '商品与库存管理' : (viewMode === 'deleted' ? '已删除商品' : (editingProductId ? '编辑商品' : '新增商品')) }}</h2>
       <div class="header-actions">
         <div v-if="viewMode === 'list'" class="segmented">
           <button class="seg-btn" :class="{ active: costingMode === 'avg' }" @click="setCostingMode('avg')">均价</button>
           <button class="seg-btn" :class="{ active: costingMode === 'fifo' }" @click="setCostingMode('fifo')">FIFO</button>
         </div>
-        <button @click="viewMode = 'add'; editingProductId = null; newProduct = { barcode: '', name: '', brand: '', supplier_id: '', category_id: 1, cost_price: 0, retail_price: 0, stock: 10, min_stock: 5, unit: '件', is_weighing: false, image_url: '', image_base64: '', image_mime: '', expiry_date: '' }; imagePreview = '';" class="btn btn-primary" v-if="viewMode === 'list' || viewMode === 'deleted'">
+        <button @click="viewMode = 'add'; editingProductId = null; newProduct = { barcode: '', name: '', brand: '', supplier_ids: [], category_id: 1, cost_price: 0, retail_price: 0, stock: 10, min_stock: 5, unit: '件', is_weighing: false, image_url: '', image_base64: '', image_mime: '', expiry_date: '' }; imagePreview = '';" class="btn btn-primary" v-if="viewMode === 'list' || viewMode === 'deleted'">
           <span class="icon">+</span> 录入新商品
-        </button>
-        <button @click="showSupplierModal = true" class="btn btn-secondary" v-if="viewMode === 'list' || viewMode === 'deleted'">
-          <span class="icon">🏢</span> 供应商管理
         </button>
         <button @click="showBarcodeConfigModal = true" class="btn btn-secondary" v-if="viewMode === 'list' || viewMode === 'deleted'">
           <span class="icon">⚙️</span> 条码设置
@@ -669,13 +625,18 @@ onMounted(() => {
                 <input v-model="newProduct.brand" type="text" placeholder="选填，如：可口可乐" class="form-input" />
               </div>
               <div class="form-group col">
-                <label>供应商 (可多选)</label>
-                <div class="supplier-checkbox-group">
-                  <label v-for="sup in suppliers" :key="sup.id" class="checkbox-label">
-                    <input type="checkbox" :value="sup.id" v-model="newProduct.supplier_ids" />
-                    {{ sup.name }}
-                  </label>
-                  <div v-if="suppliers.length === 0" style="color:#9ca3af;font-size:12px;">暂无供应商，请先在右上角添加</div>
+                <label>供应商（可多选）</label>
+                <div class="supplier-select" @click.stop>
+                  <button type="button" class="form-select supplier-select-trigger" @click="supplierMenuOpen = !supplierMenuOpen">
+                    {{ selectedSupplierNames.length ? selectedSupplierNames.join('、') : '请选择供应商' }}
+                  </button>
+                  <div v-if="supplierMenuOpen" class="supplier-dropdown">
+                    <input v-model="supplierSearch" class="form-input" placeholder="筛选供应商" @click.stop />
+                    <label v-for="sup in filteredSuppliers" :key="sup.id" class="checkbox-label">
+                      <input type="checkbox" :value="sup.id" v-model="newProduct.supplier_ids" /> {{ sup.name }}
+                    </label>
+                    <div v-if="!filteredSuppliers.length" class="supplier-empty">没有匹配的供应商</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -881,63 +842,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 供应商管理弹窗 -->
-    <div class="modal-overlay" :class="{ 'is-active': showSupplierModal }">
-      <div class="modal-content" v-if="showSupplierModal" style="max-width: 600px;">
-        <div class="modal-header">
-          <h3>🏢 供应商管理</h3>
-          <button class="close-btn" @click="showSupplierModal = false">×</button>
-        </div>
-        <div class="modal-body" style="padding: 20px;">
-          <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px;">
-            <div style="flex: 2;">
-              <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500;">供应商名称 <span class="required" style="color:var(--danger)">*</span></label>
-              <input type="text" v-model="newSupplier.name" class="form-input" placeholder="如：XX商贸公司">
-            </div>
-            <div style="flex: 1.5;">
-              <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500;">联系人</label>
-              <input type="text" v-model="newSupplier.contact" class="form-input" placeholder="如：张三">
-            </div>
-            <div style="flex: 1.5;">
-              <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500;">联系电话</label>
-              <input type="text" v-model="newSupplier.phone" class="form-input" placeholder="如：138xxxx">
-            </div>
-            <div style="flex: 0 0 auto;">
-              <button class="btn btn-primary" @click="addSupplier" style="height: 38px; padding: 0 16px;">添加</button>
-            </div>
-          </div>
-          
-          <div class="table-container" style="max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
-            <table class="data-table" style="font-size: 13px; margin: 0; width: 100%;">
-            <thead>
-              <tr>
-                <th>供应商名称</th>
-                <th>联系人</th>
-                <th>联系电话</th>
-                <th width="80">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="sup in suppliers" :key="sup.id">
-                <td>{{ sup.name }}</td>
-                <td>{{ sup.contact || '-' }}</td>
-                <td>{{ sup.phone || '-' }}</td>
-                <td>
-                  <button class="btn btn-danger btn-xs" @click="deleteSupplier(sup.id)">删除</button>
-                </td>
-              </tr>
-              <tr v-if="suppliers.length === 0">
-                <td colspan="4" style="text-align: center; color: #9ca3af; padding: 24px;">暂无供应商数据</td>
-              </tr>
-            </tbody>
-          </table>
-          </div>
-        </div>
-        <div class="modal-footer" style="padding: 16px 20px;">
-          <button class="btn btn-secondary" @click="showSupplierModal = false">关闭</button>
-        </div>
-      </div>
-    </div>
     <div class="modal-overlay" :class="{ 'is-active': showRestockModal }">
       <div class="modal-content" v-if="showRestockModal">
         <div class="modal-header">
@@ -1863,6 +1767,12 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: #fff;
 }
+.supplier-select { position: relative; }
+.supplier-select-trigger { width: 100%; text-align: left; min-height: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.supplier-dropdown { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; padding: 8px; background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: 0 10px 24px rgba(15,23,42,.14); max-height: 220px; overflow-y: auto; }
+.supplier-dropdown .form-input { margin-bottom: 8px; width: 100%; box-sizing: border-box; }
+.supplier-dropdown .checkbox-label { padding: 7px 4px; }
+.supplier-empty { color: #94a3b8; padding: 8px 4px; font-size: 12px; }
 .checkbox-label {
   display: flex;
   align-items: center;

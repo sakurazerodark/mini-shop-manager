@@ -201,6 +201,8 @@ const toggleReportMenu = () => {
 }
 
 const currentTitle = computed(() => {
+  if (route.path === '/inventory-alerts') return '库存预警'
+  if (route.path === '/suppliers') return '供应商管理'
   if (route.path === '/') return '收银台'
   if (route.path === '/inventory') return '商品与库存'
   if (route.path === '/report') return '销售报表'
@@ -272,6 +274,24 @@ const setView = (path) => {
           <span class="nav-text" v-show="!isSidebarCollapsed">商品与库存</span>
         </a>
         <a v-if="hasPermission('order.view')"
+          href="#"
+          :class="['nav-item', { active: route.path === '/inventory-alerts' }]"
+          @click.prevent="setView('/inventory-alerts')"
+          :title="isSidebarCollapsed ? '库存预警' : ''"
+        >
+          <span class="nav-icon">⚠️</span>
+          <span class="nav-text" v-show="!isSidebarCollapsed">库存预警</span>
+        </a>
+        <a v-if="canManageInventory"
+          href="#"
+          :class="['nav-item', { active: route.path === '/suppliers' }]"
+          @click.prevent="setView('/suppliers')"
+          :title="isSidebarCollapsed ? '供应商管理' : ''"
+        >
+          <span class="nav-icon">🏢</span>
+          <span class="nav-text" v-show="!isSidebarCollapsed">供应商管理</span>
+        </a>
+        <a v-if="hasPermission('order.view')"
           href="#" 
           :class="['nav-item', { active: route.path === '/stock-logs' }]" 
           @click.prevent="setView('/stock-logs')"
@@ -303,6 +323,9 @@ const setView = (path) => {
             </a>
             <a href="#" :class="['sub-nav-item', { active: route.query.tab === 'abnormal' }]" @click.prevent="setView('/report?tab=abnormal')">
               <span class="sub-nav-text">异常订单</span>
+            </a>
+            <a href="#" :class="['sub-nav-item', { active: route.query.tab === 'analysis' } ]" @click.prevent="setView('/report?tab=analysis')">
+              <span class="sub-nav-text">经营分析</span>
             </a>
           </div>
         </div>

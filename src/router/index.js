@@ -5,6 +5,8 @@ import SalesReport from '../views/SalesReport.vue'
 import SettingsPage from '../views/SettingsPage.vue'
 import StockLogsReport from '../views/StockLogsReport.vue'
 import AccessControl from '../views/AccessControl.vue'
+import SuppliersManagement from '../views/SuppliersManagement.vue'
+import InventoryAlerts from '../views/InventoryAlerts.vue'
 import { authState, hasPermission } from '../store'
 
 const routes = [
@@ -18,6 +20,18 @@ const routes = [
     path: '/inventory',
     name: 'InventoryManager',
     component: InventoryManager,
+    meta: { permission: 'order.manage' }
+  },
+  {
+    path: '/inventory-alerts',
+    name: 'InventoryAlerts',
+    component: InventoryAlerts,
+    meta: { permission: 'order.view' }
+  },
+  {
+    path: '/suppliers',
+    name: 'SuppliersManagement',
+    component: SuppliersManagement,
     meta: { permission: 'order.manage' }
   },
   {
