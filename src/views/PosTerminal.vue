@@ -463,6 +463,11 @@ const checkout = async () => {
     return
   }
 
+  if (totalAmount.value <= 0) {
+    window.$toast('支付总价必须大于 0 元，无法结账！', 'warning')
+    return
+  }
+
   if (!ensurePaymentConfigured()) return
 
   const orderData = buildOrderData()
@@ -798,7 +803,7 @@ onUnmounted(() => {
         <button 
           @click="checkout" 
           class="btn btn-checkout" 
-          :disabled="cart.length === 0 || !isPaymentEnabled(paymentMethod) || showPayOverlay || isFinalizing"
+          :disabled="cart.length === 0 || totalAmount <= 0 || !isPaymentEnabled(paymentMethod) || showPayOverlay || isFinalizing"
         >
           <span class="checkout-text">结账收款</span>
           <span class="checkout-shortcut">Enter</span>
