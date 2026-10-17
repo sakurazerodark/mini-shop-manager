@@ -10,8 +10,22 @@ const barcodeInputRef = ref(null)
 const cart = ref([])
 const paymentMethod = ref('alipay_dynamic_qr')
 const paymentConfig = ref(null)
-const paymentPreferences = ref({ default_method: 'alipay_dynamic_qr', methods: [] })
+const paymentPreferences = ref({
+  default_method: 'alipay_dynamic_qr',
+  shortcuts: { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' },
+  methods: []
+})
 const scanMode = ref('product')
+
+const defaultCashierShortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
+const cashierShortcuts = computed(() => ({ ...defaultCashierShortcuts, ...(paymentPreferences.value?.shortcuts || {}) }))
+const shortcutForAction = (name) => cashierShortcuts.value[name]
+const shortcutLabel = (value) => value === 'Escape' ? 'ESC' : (value || '')
+const matchesShortcut = (eventKey, shortcut) => {
+  if (!shortcut) return false
+  if (shortcut === 'Escape') return eventKey === 'Escape' || eventKey === 'Esc'
+  return String(eventKey).toLowerCase() === String(shortcut).toLowerCase()
+}
 
 // 结账成功动画状态
 const showSuccessOverlay = ref(false)
@@ -163,6 +177,8 @@ const fetchPaymentConfig = async () => {
 
 const getPaymentPreference = (method) => paymentPreferences.value?.methods?.find(item => item.id === method)
 const isPaymentMethodEnabled = (method) => Boolean(getPaymentPreference(method)?.enabled)
+const paymentMethodLabel = (method, fallback) => getPaymentPreference(method)?.name || fallback
+const paymentMethodShortcut = (method) => getPaymentPreference(method)?.shortcut || ''
 const getPaymentChannel = (method) => getPaymentPreference(method)?.channel || null
 const paymentChannelName = (channel) => ({ alipay: '支付宝', wechat: '微信支付', unionpay: '云闪付', auto: '自动识别' }[channel] || channel || '未选择渠道')
 const isDynamicQrMethod = (method) => method === 'alipay_dynamic_qr'
@@ -508,44 +524,59 @@ let lastKeyTime = 0
 const suspendedOrder = ref(null)
 
 const handleGlobalKeydown = (e) => {
-  // 处理全局快捷键
-  if (e.key === 'F1') {
-    e.preventDefault()
-    if (cart.value.length === 0) {
-      window.$toast('购物车为空，无法挂单', 'warning')
-      return
-    }
-    suspendedOrder.value = JSON.parse(JSON.stringify(cart.value))
-    cart.value = []
-    window.$toast('已挂单', 'success')
-    return
-  }
-  
-  if (e.key === 'F2') {
-    e.preventDefault()
-    if (!suspendedOrder.value || suspendedOrder.value.length === 0) {
-      window.$toast('暂无挂单可取', 'warning')
-      return
-    }
-    if (cart.value.length > 0) {
-      window.$toast('请先结账或清空当前购物车，再取单', 'warning')
-      return
-    }
-    cart.value = JSON.parse(JSON.stringify(suspendedOrder.value))
-    suspendedOrder.value = null
-    window.$toast('已取单', 'success')
-    return
-  }
-  
-  if (e.key === 'Escape' && !showSuccessOverlay.value && !showWeightModal.value && !showPayOverlay.value) {
-    e.preventDefault()
-    if (cart.value.length > 0) {
-      cart.value = []
-      window.$toast('购物车已清空', 'info')
-    }
-    return
-  }
+  const activeElement = document.activeElement
+  const isTextEntry = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement?.tagName) || activeElement?.isContentEditable
+  const isBarcodeEntry = activeElement === barcodeInputRef.value
+  const canUseShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !showSuccessOverlay.value && !showWeightModal.value && !showPayOverlay.value && (!isTextEntry || isBarcodeEntry)
 
+  if (canUseShortcut) {
+    const paymentShortcut = paymentPreferences.value?.methods?.find((method) => method.enabled && matchesShortcut(e.key, method.shortcut))
+    if (paymentShortcut) {
+      e.preventDefault()
+      paymentMethod.value = paymentShortcut.id
+      window.$toast(`${paymentShortcut.name}已选中`, 'info')
+      return
+    }
+    if (matchesShortcut(e.key, shortcutForAction('hold'))) {
+      e.preventDefault()
+      if (cart.value.length === 0) {
+        window.$toast('购物车为空，无法挂单', 'warning')
+        return
+      }
+      suspendedOrder.value = JSON.parse(JSON.stringify(cart.value))
+      cart.value = []
+      window.$toast('已挂单', 'success')
+      return
+    }
+    if (matchesShortcut(e.key, shortcutForAction('retrieve'))) {
+      e.preventDefault()
+      if (!suspendedOrder.value || suspendedOrder.value.length === 0) {
+        window.$toast('暂无挂单可取', 'warning')
+        return
+      }
+      if (cart.value.length > 0) {
+        window.$toast('请先结账或清空当前购物车，再取单', 'warning')
+        return
+      }
+      cart.value = JSON.parse(JSON.stringify(suspendedOrder.value))
+      suspendedOrder.value = null
+      window.$toast('已取单', 'success')
+      return
+    }
+    if (matchesShortcut(e.key, shortcutForAction('clear'))) {
+      e.preventDefault()
+      if (cart.value.length > 0) {
+        cart.value = []
+        window.$toast('购物车已清空', 'info')
+      }
+      return
+    }
+    if (matchesShortcut(e.key, shortcutForAction('checkout')) && e.key !== 'Enter') {
+      e.preventDefault()
+      checkout()
+      return
+    }
+  }
   if (showSuccessOverlay.value) {
     if (e.key === 'Escape' || e.key === 'Enter' || e.key.length === 1) {
       closeSuccessOverlay()
@@ -594,6 +625,9 @@ const handleGlobalKeydown = (e) => {
         barcodeInput.value = barcodeBuffer
         handleScan()
       }
+    } else if (matchesShortcut(e.key, shortcutForAction('checkout')) && !showPayOverlay.value && !showWeightModal.value && (!isTextEntry || isBarcodeEntry)) {
+      e.preventDefault()
+      checkout()
     }
     barcodeBuffer = ''
   }
@@ -729,6 +763,8 @@ onUnmounted(() => {
         <div class="pay-methods">
           <label v-if="isPaymentMethodEnabled('alipay_dynamic_qr')" :class="['pay-method', { active: paymentMethod === 'alipay_dynamic_qr', disabled: !isPaymentEnabled('alipay_dynamic_qr') }]" :style="{ order: paymentOrder('alipay_dynamic_qr') }">
             <input type="radio" v-model="paymentMethod" value="alipay_dynamic_qr" class="hidden-radio" :disabled="!isPaymentEnabled('alipay_dynamic_qr')" />
+            <span class="pay-custom-name">{{ paymentMethodLabel('alipay_dynamic_qr', '支付宝客户扫码') }}</span>
+            <kbd v-if="paymentMethodShortcut('alipay_dynamic_qr')" class="pay-shortcut">{{ shortcutLabel(paymentMethodShortcut('alipay_dynamic_qr')) }}</kbd>
             <div class="pay-icon alipay">
               <svg class="icon" viewBox="0 0 1024 1024" width="28" height="28" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M902.095 652.871l-250.96-84.392s19.287-28.87 39.874-85.472c20.59-56.606 23.539-87.689 23.539-87.689l-162.454-1.339v-55.487l196.739-1.387v-39.227H552.055v-89.29h-96.358v89.294H272.133v39.227l183.564-1.304v59.513h-147.24v31.079h303.064s-3.337 25.223-14.955 56.606c-11.615 31.38-23.58 58.862-23.58 58.862s-142.3-49.804-217.285-49.804c-74.985 0-166.182 30.123-175.024 117.55-8.8 87.383 42.481 134.716 114.728 152.139 72.256 17.513 138.962-0.173 197.04-28.607 58.087-28.391 115.081-92.933 115.081-92.933l292.486 142.041c-11.932 69.3-72.067 119.914-142.387 119.844H266.37c-79.714 0.078-144.392-64.483-144.466-144.194V266.374c-0.074-79.72 64.493-144.399 144.205-144.47h491.519c79.714-0.073 144.396 64.49 144.466 144.203v386.764z m-365.76-48.895s-91.302 115.262-198.879 115.262c-107.623 0-130.218-54.767-130.218-94.155 0-39.34 22.373-82.144 113.943-88.333 91.519-6.18 215.2 67.226 215.2 67.226h-0.047z" fill="#02A9F1"></path></svg>
             </div>
@@ -752,6 +788,8 @@ onUnmounted(() => {
           </label>
           <label v-if="isPaymentMethodEnabled('merchant_scan_customer')" class="pay-method" :class="{ active: paymentMethod === 'merchant_scan_customer', disabled: !isPaymentEnabled('merchant_scan_customer') }" :style="{ order: paymentOrder('merchant_scan_customer') }">
             <input type="radio" v-model="paymentMethod" value="merchant_scan_customer" class="hidden-radio" :disabled="!isPaymentEnabled('merchant_scan_customer')" />
+            <span class="pay-custom-name">{{ paymentMethodLabel('merchant_scan_customer', '商家扫客户码') }}</span>
+            <kbd v-if="paymentMethodShortcut('merchant_scan_customer')" class="pay-shortcut">{{ shortcutLabel(paymentMethodShortcut('merchant_scan_customer')) }}</kbd>
             <div class="pay-icon alipay">⌁</div>
             <span class="pay-name">商家扫客户码 <small>({{ paymentChannelName(getPaymentChannel('merchant_scan_customer')) }})</small></span>
             <div class="pay-badge" v-if="!isPaymentEnabled('merchant_scan_customer')">渠道未配置</div>
@@ -775,6 +813,8 @@ onUnmounted(() => {
           </label>
           <label v-if="isPaymentMethodEnabled('personal_qrcode')" class="pay-method" :class="{ active: paymentMethod === 'personal_qrcode', disabled: !isPaymentEnabled('personal_qrcode') }" :style="{ order: paymentOrder('personal_qrcode') }">
             <input type="radio" v-model="paymentMethod" value="personal_qrcode" class="hidden-radio" :disabled="!isPaymentEnabled('personal_qrcode')" />
+            <span class="pay-custom-name">{{ paymentMethodLabel('personal_qrcode', '商家静态二维码') }}</span>
+            <kbd v-if="paymentMethodShortcut('personal_qrcode')" class="pay-shortcut">{{ shortcutLabel(paymentMethodShortcut('personal_qrcode')) }}</kbd>
             <div class="pay-icon personal_qrcode">
               <svg viewBox="0 0 1024 1024" width="28" height="28"><path d="M384 128H128v256h256V128z m-64 192H192V192h128v128zM896 128H640v256h256V128z m-64 192H704V192h128v128zM384 640H128v256h256V640z m-64 192H192V704h128v128zM640 640h64v64h-64zM704 704h64v64h-64zM768 640h128v64H768zM832 704h64v192h-64zM640 768h128v64H640zM768 832h64v64h-64zM640 832h64v64h-64zM448 128h128v128H448zM448 384h64v64h-64zM512 448h64v128h-64zM448 576h64v64h-64zM448 768h128v128H448zM576 256h64v192h-64zM640 448h64v128h-64zM704 448h192v128H704zM832 384h64v64h-64zM128 448h256v128H128zM320 576h64v64h-64z" fill="#4f46e5"/></svg>
             </div>
@@ -783,6 +823,8 @@ onUnmounted(() => {
           </label>
           <label v-if="isPaymentMethodEnabled('cash')" class="pay-method" :class="{ active: paymentMethod === 'cash', disabled: !isPaymentEnabled('cash') }" :style="{ order: paymentOrder('cash') }">
             <input type="radio" v-model="paymentMethod" value="cash" class="hidden-radio" :disabled="!isPaymentEnabled('cash')" />
+            <span class="pay-custom-name">{{ paymentMethodLabel('cash', '现金收款') }}</span>
+            <kbd v-if="paymentMethodShortcut('cash')" class="pay-shortcut">{{ shortcutLabel(paymentMethodShortcut('cash')) }}</kbd>
             <div class="pay-icon cash">
               <svg viewBox="0 0 1024 1024" width="28" height="28"><path d="M885.333 256c-17.066 0-32-14.933-32-32s14.934-32 32-32h42.667c35.413 0 64 28.587 64 64v42.667c0 17.066-14.933 32-32 32s-32-14.934-32-32V256h-42.667zM138.667 256v42.667c0 17.066-14.934 32-32 32s-32-14.934-32-32V256c0-35.413 28.587-64 64-64h42.666c17.067 0 32 14.933 32 32s-14.933 32-32 32h-42.666zM885.333 768h42.667v-42.667c0-17.066 14.933-32 32-32s32 14.934 32 32V768c0 35.413-28.587 64-64 64h-42.667c-17.066 0-32-14.933-32-32s14.934-32 32-32zM138.667 768h42.666c17.067 0 32 14.933 32 32s-14.933 32-32 32h-42.666c-35.413 0-64-28.587-64-64v-42.667c0-17.066 14.934-32 32-32s32 14.934 32 32V768zM512 682.667c-94.293 0-170.667-76.374-170.667-170.667S417.707 341.333 512 341.333 682.667 417.707 682.667 512 606.293 682.667 512 682.667z m0-277.334c-58.88 0-106.667 47.787-106.667 106.667s47.787 106.667 106.667 106.667 106.667-47.787 106.667-106.667-47.787-106.667-106.667-106.667zM341.333 768H682.667c17.066 0 32 14.933 32 32s-14.934 32-32 32H341.333c-17.066 0-32-14.933-32-32s14.934-32 32-32zM341.333 192H682.667c17.066 0 32 14.933 32 32s-14.934 32-32 32H341.333c-17.066 0-32-14.933-32-32s14.934-32 32-32zM213.333 384c17.067 0 32 14.933 32 32v192c0 17.066-14.933 32-32 32s-32-14.934-32-32V416c0-17.067 14.933-32 32-32zM810.667 384c17.066 0 32 14.933 32 32v192c0 17.066-14.934 32-32 32s-32-14.934-32-32V416c0-17.067 14.934-32 32-32z" fill="#f59e0b"/></svg>
             </div>
@@ -791,6 +833,8 @@ onUnmounted(() => {
           </label>
           <label v-if="isPaymentMethodEnabled('other')" class="pay-method" :class="{ active: paymentMethod === 'other', disabled: !isPaymentEnabled('other') }" :style="{ order: paymentOrder('other') }">
             <input type="radio" v-model="paymentMethod" value="other" class="hidden-radio" :disabled="!isPaymentEnabled('other')" />
+            <span class="pay-custom-name">{{ paymentMethodLabel('other', '其他方式') }}</span>
+            <kbd v-if="paymentMethodShortcut('other')" class="pay-shortcut">{{ shortcutLabel(paymentMethodShortcut('other')) }}</kbd>
             <div class="pay-icon cash">+</div>
             <span class="pay-name">其他方式</span>
             <div class="check-icon" v-if="paymentMethod === 'other'">✓</div>
@@ -806,13 +850,13 @@ onUnmounted(() => {
           :disabled="cart.length === 0 || totalAmount <= 0 || !isPaymentEnabled(paymentMethod) || showPayOverlay || isFinalizing"
         >
           <span class="checkout-text">结账收款</span>
-          <span class="checkout-shortcut">Enter</span>
+          <span class="checkout-shortcut">{{ shortcutLabel(shortcutForAction('checkout')) }}</span>
         </button>
         
-        <div class="shortcuts-panel">
-          <div class="shortcut-tag"><kbd>F1</kbd> 挂单</div>
-          <div class="shortcut-tag"><kbd>F2</kbd> 取单</div>
-          <div class="shortcut-tag"><kbd>ESC</kbd> 清空</div>
+        <div class="shortcuts-panel dynamic-shortcuts">
+          <div class="shortcut-tag"><kbd>{{ shortcutLabel(shortcutForAction('hold')) }}</kbd> 挂单</div>
+          <div class="shortcut-tag"><kbd>{{ shortcutLabel(shortcutForAction('retrieve')) }}</kbd> 取单</div>
+          <div class="shortcut-tag"><kbd>{{ shortcutLabel(shortcutForAction('clear')) }}</kbd> 清空</div>
         </div>
       </div>
     </div>
@@ -1349,12 +1393,39 @@ onUnmounted(() => {
 .pay-icon {
   font-size: 24px;
   margin-right: 16px;
+  order: 1;
 }
 
 .pay-name {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-main);
+}
+
+.pay-method > .pay-name {
+  display: none;
+}
+
+.pay-custom-name {
+  order: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pay-method.disabled .pay-custom-name {
+  color: var(--text-muted);
+}
+
+.pay-shortcut {
+  order: 3;
+  margin-left: auto;
+  margin-right: 28px;
+  flex: 0 0 auto;
 }
 
 .check-icon {
@@ -1411,8 +1482,11 @@ onUnmounted(() => {
   font-size: 12px;
   opacity: 0.8;
   background: rgba(255,255,255,0.2);
-  padding: 2px 8px;
-  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
 }
 
 .shortcuts-panel {

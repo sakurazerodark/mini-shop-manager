@@ -11,6 +11,31 @@ const DEFAULT_PAYMENT_PREFERENCES = {
   ]
 };
 
+const DEFAULT_SHORTCUTS = {
+  checkout: 'Enter',
+  hold: 'F1',
+  retrieve: 'F2',
+  clear: 'Escape'
+};
+
+const DEFAULT_METHOD_SHORTCUTS = {
+  alipay_dynamic_qr: 'F5',
+  merchant_scan_customer: 'F6',
+  personal_qrcode: 'F7',
+  cash: 'F8',
+  other: 'F9'
+};
+
+const normalizeShortcut = (value, fallback = '') => {
+  const key = String(value || '').trim();
+  if (!key) return fallback;
+  if (/^esc(?:ape)?$/i.test(key)) return 'Escape';
+  if (/^return$/i.test(key)) return 'Enter';
+  if (/^f(?:[1-9]|1[0-2])$/i.test(key)) return key.toUpperCase();
+  if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase();
+  return fallback;
+};
+
 const normalizePaymentPreferences = (input = {}) => {
   const source = input && typeof input === 'object' ? input : {};
   const legacyIds = { alipay: 'alipay_dynamic_qr', alipay_scan: 'merchant_scan_customer', customer_dynamic_qr: 'alipay_dynamic_qr' };
@@ -26,7 +51,8 @@ const normalizePaymentPreferences = (input = {}) => {
       channel: base.channel === 'auto' ? 'auto' : base.channel,
       name: typeof method.name === 'string' && method.name.trim() ? method.name.trim() : base.name,
       enabled: method.enabled === undefined ? base.enabled : Boolean(method.enabled),
-      sort: Number.isFinite(sort) ? sort : (index + 1) * 10
+      sort: Number.isFinite(sort) ? sort : (index + 1) * 10,
+      shortcut: normalizeShortcut(method.shortcut, DEFAULT_METHOD_SHORTCUTS[base.id] || '')
     };
   }).sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id));
 
@@ -35,7 +61,12 @@ const normalizePaymentPreferences = (input = {}) => {
   const defaultMethod = methods.some((method) => method.id === requestedDefault && method.enabled)
     ? requestedDefault
     : (methods.find((method) => method.enabled)?.id || methods[0].id);
-  return { default_method: defaultMethod, methods };
+  const sourceShortcuts = source.shortcuts && typeof source.shortcuts === 'object' ? source.shortcuts : {};
+  const shortcuts = Object.fromEntries(Object.entries(DEFAULT_SHORTCUTS).map(([name, fallback]) => [
+    name,
+    normalizeShortcut(sourceShortcuts[name], fallback)
+  ]));
+  return { default_method: defaultMethod, shortcuts, methods };
 };
 
 const getSetting = async (key, fallback = null) => {

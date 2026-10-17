@@ -141,7 +141,32 @@ const payment = ref({
 const paymentStatus = ref(null)
 const isSavingPayment = ref(false)
 const pollIntervalSec = ref(2)
-const paymentPreferences = ref({ default_method: 'alipay', methods: [] })
+const paymentPreferences = ref({
+  default_method: 'alipay_dynamic_qr',
+  shortcuts: { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' },
+  methods: []
+})
+const cashierShortcutFields = [
+  { key: 'checkout', label: '结账收款', hint: '确认当前订单' },
+  { key: 'hold', label: '挂单', hint: '暂存当前购物车' },
+  { key: 'retrieve', label: '取单', hint: '恢复已挂起订单' },
+  { key: 'clear', label: '清空', hint: '清空当前购物车' }
+]
+const shortcutLabel = (value) => value === 'Escape' ? 'ESC' : (value || '未设置')
+const captureShortcut = (event, target, field) => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.key === 'Tab') return
+  const key = event.key
+  if (/^F(?:[1-9]|1[0-2])$/i.test(key)) target[field] = key.toUpperCase()
+  else if (key === 'Escape') target[field] = 'Escape'
+  else if (key === 'Enter') target[field] = 'Enter'
+  else if (/^[a-z0-9]$/i.test(key)) target[field] = key.toUpperCase()
+}
+const resetCashierShortcuts = () => {
+  paymentPreferences.value.shortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
+  paymentPreferences.value.methods.forEach((method, index) => {
+    method.shortcut = ['F5', 'F6', 'F7', 'F8', 'F9'][index] || ''
+  })
+}
 
 const testBarcode = ref('')
 const testResult = ref(null)
@@ -222,6 +247,7 @@ const savePaymentScope = async (scope) => {
   isSavingPayment.value = true
   try {
     const s = String(scope || '').trim()
+    if ((s === 'general' || s === 'all') && !validateCashierShortcuts()) return
     const payload = {}
     const pollMs = Math.max(1000, Math.floor(Number(pollIntervalSec.value || 0) * 1000))
 
@@ -330,6 +356,23 @@ const movePaymentMethod = (index, offset) => {
 
 const setDefaultPaymentMethod = (method) => {
   if (method?.enabled) paymentPreferences.value.default_method = method.id
+}
+
+const validateCashierShortcuts = () => {
+  const entries = [
+    ...cashierShortcutFields.map((field) => [field.key, paymentPreferences.value.shortcuts?.[field.key]]),
+    ...(paymentPreferences.value.methods || []).map((method) => [method.id, method.shortcut])
+  ].filter(([, shortcut]) => shortcut)
+  const seen = new Set()
+  for (const [name, shortcut] of entries) {
+    const normalized = String(shortcut).toLowerCase()
+    if (seen.has(normalized)) {
+      window.$toast?.(`快捷键 ${shortcut} 已重复，请重新设置`, 'warning')
+      return false
+    }
+    seen.add(normalized)
+  }
+  return true
 }
 
 const savePaymentSettings = async () => {
@@ -915,7 +958,7 @@ onUnmounted(() => {
                 <div v-for="(method, index) in paymentPreferences.methods" :key="method.id" class="payment-preference-row">
                   <div class="payment-preference-main">
                     <input type="checkbox" v-model="method.enabled" @change="method.enabled || (paymentPreferences.default_method === method.id ? paymentPreferences.default_method = paymentPreferences.methods.find(item => item.enabled)?.id || '' : null)" />
-                    <span>{{ method.name }}</span>
+                    <input v-model="method.name" class="method-name-input" aria-label="收款方式名称" />
                     <small>{{ method.category }}</small>
                     <select v-if="method.channels?.length && method.channel !== 'auto'" v-model="method.channel" class="channel-select" aria-label="线上支付渠道">
                       <option v-for="channel in method.channels" :key="channel" :value="channel">{{ channel === 'alipay' ? '支付宝' : channel === 'wechat' ? '微信支付' : '云闪付' }}</option>
@@ -923,6 +966,10 @@ onUnmounted(() => {
                     <small v-else-if="method.channel === 'auto'" class="auto-channel">自动识别支付宝/微信支付/云闪付</small>
                   </div>
                   <div class="payment-preference-actions">
+                    <label class="shortcut-editor" title="按下键盘按键设置快捷键">
+                      <span>快捷键</span>
+                      <input :value="shortcutLabel(method.shortcut)" readonly @keydown.prevent="captureShortcut($event, method, 'shortcut')" />
+                    </label>
                     <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="movePaymentMethod(index, -1)" title="上移">上移</button>
                     <button class="btn btn-secondary" type="button" :disabled="index === paymentPreferences.methods.length - 1" @click="movePaymentMethod(index, 1)" title="下移">下移</button>
                     <label class="default-choice"><input type="radio" name="default-payment-method" :checked="paymentPreferences.default_method === method.id" :disabled="!method.enabled" @change="setDefaultPaymentMethod(method)" /> 默认</label>
@@ -934,6 +981,22 @@ onUnmounted(() => {
             <div class="form-group">
               <label>支付结果轮询间隔（秒） <span class="hint">不得小于 1 秒</span></label>
               <input v-model.number="pollIntervalSec" type="number" min="1" step="1" class="form-input" placeholder="默认 2 秒" />
+            </div>
+            <div class="form-group shortcut-settings">
+              <div class="shortcut-settings-head">
+                <label>收银台快捷键</label>
+                <button type="button" class="btn btn-secondary btn-reset-shortcuts" @click="resetCashierShortcuts">恢复默认</button>
+              </div>
+              <div class="shortcut-grid">
+                <label v-for="field in cashierShortcutFields" :key="field.key" class="shortcut-row">
+                  <span>
+                    <strong>{{ field.label }}</strong>
+                    <small>{{ field.hint }}</small>
+                  </span>
+                  <input :value="shortcutLabel(paymentPreferences.shortcuts?.[field.key])" readonly @keydown.prevent="captureShortcut($event, paymentPreferences.shortcuts, field.key)" />
+                </label>
+              </div>
+              <div class="hint">点击输入框后按下一个按键即可修改；快捷键不能重复。</div>
             </div>
             <div class="note">
               <div class="note-title">安全提示</div>
@@ -1009,6 +1072,102 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.method-name-input {
+  width: min(240px, 30vw);
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.shortcut-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.shortcut-editor input,
+.shortcut-row input {
+  width: 62px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: #f8fafc;
+  color: var(--text-main);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.shortcut-editor input:focus,
+.shortcut-row input:focus {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary-light);
+}
+
+.shortcut-settings {
+  padding-top: 4px;
+}
+
+.shortcut-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.shortcut-settings-head label {
+  margin-bottom: 0;
+}
+
+.btn-reset-shortcuts {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: #f8fafc;
+}
+
+.shortcut-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-row strong {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.shortcut-row small {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .payment-preference-main small {
@@ -1366,6 +1525,21 @@ onUnmounted(() => {
   }
   .actions .btn {
     width: 100%;
+  }
+  .payment-preference-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .payment-preference-main,
+  .payment-preference-actions {
+    flex-wrap: wrap;
+  }
+  .method-name-input {
+    flex: 1 1 180px;
+    width: auto;
+  }
+  .shortcut-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
