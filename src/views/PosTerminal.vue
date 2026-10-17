@@ -978,8 +978,8 @@ onUnmounted(() => {
   display: flex;
   height: 100vh;
   background-color: var(--bg-color);
-  padding: 20px;
-  gap: 20px;
+  padding: 18px;
+  gap: 18px;
 }
 
 /* 左侧购物车 */
@@ -996,9 +996,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   background: var(--surface);
-  padding: 16px 24px;
+  padding: 15px 20px;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
 }
 
 .page-title {
@@ -1056,6 +1057,7 @@ onUnmounted(() => {
   background: var(--surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1372,7 +1374,7 @@ onUnmounted(() => {
 
 .btn-checkout {
   width: 100%;
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  background: var(--primary);
   color: white;
   border: none;
   padding: 20px;
@@ -1381,12 +1383,12 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(47, 107, 255, 0.3);
 }
 
 .btn-checkout:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 15px 30px -5px rgba(79, 70, 229, 0.5);
+  box-shadow: 0 15px 30px -5px rgba(47, 107, 255, 0.4);
 }
 
 .btn-checkout:active:not(:disabled) {

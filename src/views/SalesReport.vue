@@ -21,6 +21,7 @@ const recentOrders = ref([])
 const analysisDays = ref(7)
 const analysisLoading = ref(false)
 const analysisData = ref({ summary: { total_orders: 0, total_revenue: 0, total_refunds: 0 }, daily: [], top_products: [] })
+const analysisMaxRevenue = computed(() => Math.max(...analysisData.value.daily.map(item => Number(item.revenue || 0)), 1))
 
 const fetchAnalysis = async () => {
   analysisLoading.value = true
@@ -539,17 +540,23 @@ const pageSubtitle = computed(() => {
 
     <template v-else-if="currentTab === 'analysis'">
       <div class="analysis-toolbar">
-        <div><span class="analysis-label">分析周期</span><button class="period-btn" :class="{ active: analysisDays === 7 }" @click="analysisDays = 7; fetchAnalysis()">近 7 天</button><button class="period-btn" :class="{ active: analysisDays === 30 }" @click="analysisDays = 30; fetchAnalysis()">近 30 天</button></div>
-        <span class="analysis-updated" v-if="analysisLoading">加载中…</span>
+        <div class="analysis-period"><span class="analysis-label">查看周期</span><div class="period-switch"><button class="period-btn" :class="{ active: analysisDays === 7 }" @click="analysisDays = 7; fetchAnalysis()">近 7 天</button><button class="period-btn" :class="{ active: analysisDays === 30 }" @click="analysisDays = 30; fetchAnalysis()">近 30 天</button></div></div>
+        <span class="analysis-updated" v-if="analysisLoading">正在更新数据</span>
       </div>
-      <div class="dashboard-grid analysis-summary">
-        <div class="stat-card highlight"><div class="stat-label">期间流水</div><div class="stat-value"><span class="currency">¥</span>{{ Number(analysisData.summary.total_revenue || 0).toFixed(2) }}</div></div>
-        <div class="stat-card"><div class="stat-label">完成订单</div><div class="stat-value">{{ analysisData.summary.total_orders }} <span class="unit">笔</span></div></div>
-        <div class="stat-card"><div class="stat-label">退款金额</div><div class="stat-value"><span class="currency">¥</span>{{ Number(analysisData.summary.total_refunds || 0).toFixed(2) }}</div></div>
-        <div class="stat-card"><div class="stat-label">客单价</div><div class="stat-value"><span class="currency">¥</span>{{ analysisData.summary.total_orders ? (analysisData.summary.total_revenue / analysisData.summary.total_orders).toFixed(2) : '0.00' }}</div></div>
+      <div class="analysis-overview">
+        <div class="analysis-lead">
+          <div class="analysis-lead-top"><span>期间流水</span><span class="analysis-lead-mark">经营分析</span></div>
+          <div class="analysis-lead-value"><small>¥</small>{{ Number(analysisData.summary.total_revenue || 0).toFixed(2) }}</div>
+          <p>完成 {{ analysisData.summary.total_orders }} 笔订单，平均每笔 ¥{{ analysisData.summary.total_orders ? (analysisData.summary.total_revenue / analysisData.summary.total_orders).toFixed(2) : '0.00' }}</p>
+        </div>
+        <div class="analysis-metrics">
+          <div class="analysis-metric"><span>完成订单</span><strong>{{ analysisData.summary.total_orders }}</strong><small>笔</small></div>
+          <div class="analysis-metric"><span>退款金额</span><strong>¥{{ Number(analysisData.summary.total_refunds || 0).toFixed(2) }}</strong><small>期间累计</small></div>
+          <div class="analysis-metric"><span>客单价</span><strong>¥{{ analysisData.summary.total_orders ? (analysisData.summary.total_revenue / analysisData.summary.total_orders).toFixed(2) : '0.00' }}</strong><small>按完成订单计算</small></div>
+        </div>
       </div>
       <div class="analysis-columns">
-        <section class="recent-orders-card"><div class="card-header"><h3 class="card-title">流水情况</h3><span class="muted-text">按天汇总</span></div><div class="table-container"><table class="data-table"><thead><tr><th>日期</th><th>订单数</th><th>流水</th><th>退款</th></tr></thead><tbody><tr v-for="day in analysisData.daily" :key="day.date"><td>{{ day.date }}</td><td>{{ day.orders }} 笔</td><td class="order-amount">¥ {{ day.revenue.toFixed(2) }}</td><td>¥ {{ day.refunds.toFixed(2) }}</td></tr><tr v-if="!analysisData.daily.length"><td colspan="4"><div class="empty-state"><p>暂无流水数据</p></div></td></tr></tbody></table></div></section>
+        <section class="recent-orders-card analysis-panel"><div class="card-header"><div><h3 class="card-title">流水情况</h3><p class="card-caption">按天汇总期间销售额</p></div><span class="muted-text">{{ analysisData.daily.length }} 天有记录</span></div><div class="trend-strip" v-if="analysisData.daily.length"><div v-for="day in analysisData.daily" :key="`bar-${day.date}`" class="trend-item"><div class="trend-bar-wrap"><div class="trend-bar" :style="{ height: `${Math.max(10, Number(day.revenue || 0) / analysisMaxRevenue * 100)}%` }" :title="`${day.date} ¥${Number(day.revenue || 0).toFixed(2)}`"></div></div><span>{{ day.date.slice(5) }}</span></div></div><div class="table-container"><table class="data-table"><thead><tr><th>日期</th><th>订单数</th><th>流水</th><th>退款</th></tr></thead><tbody><tr v-for="day in analysisData.daily" :key="day.date"><td>{{ day.date }}</td><td>{{ day.orders }} 笔</td><td class="order-amount">¥ {{ day.revenue.toFixed(2) }}</td><td>¥ {{ day.refunds.toFixed(2) }}</td></tr><tr v-if="!analysisData.daily.length"><td colspan="4"><div class="empty-state"><p>暂无流水数据</p></div></td></tr></tbody></table></div></section>
         <section class="recent-orders-card"><div class="card-header"><h3 class="card-title">热销商品</h3><span class="muted-text">销量前 10</span></div><div class="table-container"><table class="data-table"><thead><tr><th>排名</th><th>商品</th><th>销量</th><th>销售额</th></tr></thead><tbody><tr v-for="(product, index) in analysisData.top_products" :key="product.product_id"><td><span class="rank-number">{{ index + 1 }}</span></td><td><strong>{{ product.name }}</strong></td><td>{{ product.quantity }} {{ product.unit }}</td><td class="order-amount">¥ {{ product.revenue.toFixed(2) }}</td></tr><tr v-if="!analysisData.top_products.length"><td colspan="4"><div class="empty-state"><p>暂无热销商品数据</p></div></td></tr></tbody></table></div></section>
       </div>
     </template>
@@ -932,32 +939,56 @@ const pageSubtitle = computed(() => {
 
 <style scoped>
 .report-container {
-  padding: 24px;
+  padding: 28px 32px 40px;
+  max-width: 1480px;
+  margin: 0 auto;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
-.analysis-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-.analysis-label { color: #64748b; font-size: 13px; margin-right: 10px; }
-.period-btn { border: 1px solid #cbd5e1; background: #fff; color: #475569; padding: 8px 14px; cursor: pointer; }
-.period-btn:first-of-type { border-radius: 6px 0 0 6px; }.period-btn:last-of-type { border-radius: 0 6px 6px 0; margin-left: -1px; }.period-btn.active { color: #fff; background: var(--primary); border-color: var(--primary); }
-.analysis-updated, .muted-text { color: #94a3b8; font-size: 13px; }.analysis-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }.rank-number { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 700; }.analysis-summary { margin-bottom: 20px; }
+.analysis-toolbar { display: flex; justify-content: space-between; align-items: center; }
+.analysis-period { display: flex; align-items: center; gap: 12px; }
+.analysis-label { color: var(--text-muted); font-size: 13px; }
+.period-switch { display: inline-flex; padding: 3px; border: 1px solid var(--border-color); border-radius: 7px; background: #edf0f5; }
+.period-btn { border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 700; }
+.period-btn.active { color: var(--text-main); background: #fff; box-shadow: 0 1px 3px rgba(23, 32, 51, 0.12); }
+.analysis-updated, .muted-text { color: var(--text-muted); font-size: 13px; }
+.analysis-overview { display: grid; grid-template-columns: minmax(320px, 1.15fr) minmax(0, 1.85fr); min-height: 174px; border-radius: var(--radius-lg); overflow: hidden; background: #172033; box-shadow: var(--shadow-md); }
+.analysis-lead { display: flex; flex-direction: column; justify-content: space-between; padding: 24px 28px; color: #fff; background: #172033; }
+.analysis-lead-top { display: flex; justify-content: space-between; align-items: center; color: #b9c4d7; font-size: 13px; }
+.analysis-lead-mark { color: #8db0ff; font-size: 12px; }
+.analysis-lead-value { margin-top: 18px; font-size: 42px; font-weight: 800; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
+.analysis-lead-value small { margin-right: 5px; color: #8db0ff; font-size: 20px; font-weight: 700; }
+.analysis-lead p { margin-top: 12px; color: #aab5c8; font-size: 13px; }
+.analysis-metrics { display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; }
+.analysis-metric { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 24px; border-left: 1px solid var(--border-color); }
+.analysis-metric span { color: var(--text-muted); font-size: 13px; }
+.analysis-metric strong { color: var(--text-main); font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.analysis-metric small { color: #9aa4b4; font-size: 12px; }
+.analysis-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 20px; }
+.analysis-panel { min-width: 0; }
+.card-caption { margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+.trend-strip { display: flex; align-items: flex-end; gap: 10px; height: 112px; padding: 20px 24px 0; border-bottom: 1px solid var(--border-color); background: #fbfcfd; }
+.trend-item { display: flex; min-width: 0; flex: 1; height: 100%; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; color: #98a2b3; font-size: 10px; }
+.trend-bar-wrap { display: flex; width: 100%; height: 76px; align-items: flex-end; }
+.trend-bar { width: min(24px, 72%); min-height: 5px; margin: 0 auto; border-radius: 3px 3px 0 0; background: var(--primary); opacity: .88; }
+.rank-number { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 5px; background: #edf0f5; color: #536074; font-size: 12px; font-weight: 800; }
 @media (max-width: 900px) { .analysis-columns { grid-template-columns: 1fr; } }
 
 .header-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .page-title {
   margin: 0 0 4px 0;
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 700;
   color: var(--text-main);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
 }
 
 .subtitle {
@@ -967,8 +998,8 @@ const pageSubtitle = computed(() => {
 }
 
 .btn-refresh {
-  padding: 10px 20px;
-  border-radius: var(--radius-full);
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -978,27 +1009,26 @@ const pageSubtitle = computed(() => {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  gap: 14px;
 }
 
 .stat-card {
   background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
   box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
-  gap: 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 16px;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
 .stat-card.highlight {
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  background: var(--primary);
   color: white;
 }
 .stat-card.highlight .stat-label {
@@ -1011,7 +1041,7 @@ const pageSubtitle = computed(() => {
 .stat-icon {
   width: 64px;
   height: 64px;
-  border-radius: 20px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1034,7 +1064,7 @@ const pageSubtitle = computed(() => {
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 29px;
   font-weight: 800;
   color: var(--text-main);
   line-height: 1;
@@ -1055,7 +1085,8 @@ const pageSubtitle = computed(() => {
 /* 订单列表卡片 */
 .recent-orders-card {
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -1065,13 +1096,17 @@ const pageSubtitle = computed(() => {
 }
 
 .card-header {
-  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .card-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-main);
 }
@@ -1411,7 +1446,7 @@ const pageSubtitle = computed(() => {
 
 @media (max-width: 900px) {
   .report-container {
-    padding: 14px;
+    padding: 20px 14px 28px;
     min-height: calc(100vh - 120px);
   }
 
@@ -1426,12 +1461,19 @@ const pageSubtitle = computed(() => {
     justify-content: center;
   }
 
+  .analysis-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }
+  .analysis-period { justify-content: space-between; }
+  .analysis-overview { grid-template-columns: 1fr; }
+  .analysis-lead { min-height: 170px; }
+  .analysis-metrics { grid-template-columns: 1fr; }
+  .analysis-metric { min-height: 92px; border-top: 1px solid var(--border-color); border-left: 0; }
+
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
 
   .stat-card {
-    padding: 18px;
+    padding: 17px;
   }
 
   .stat-value {

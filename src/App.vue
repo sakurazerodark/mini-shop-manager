@@ -449,38 +449,39 @@ const setView = (path) => {
 </template>
 
 <style>
-/* 全局现代 SaaS 设计系统变量 */
+/* MiniShop 运营工作台设计系统 */
 :root {
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-light: #e0e7ff;
-  --success: #10b981;
-  --success-bg: #d1fae5;
-  --danger: #ef4444;
-  --danger-bg: #fee2e2;
-  --warning: #f59e0b;
-  --warning-bg: #fef3c7;
+  --primary: #2f6bff;
+  --primary-hover: #2457d6;
+  --primary-light: #e8efff;
+  --success: #2a9d8f;
+  --success-bg: #e5f5f2;
+  --danger: #d95d4f;
+  --danger-bg: #fbe9e6;
+  --warning: #e56b4f;
+  --warning-bg: #fff0eb;
   
-  --bg-color: #f8fafc;
+  --bg-color: #f6f7f9;
   --surface: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
+  --surface-alt: #fbfcfd;
+  --text-main: #172033;
+  --text-muted: #687386;
+  --border-color: #e3e7ee;
   
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
   --radius-full: 9999px;
   
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 2px rgba(23, 32, 51, 0.04);
+  --shadow-md: 0 8px 22px rgba(23, 32, 51, 0.07);
+  --shadow-lg: 0 18px 48px rgba(23, 32, 51, 0.14);
   
-  --sidebar-bg: #0f172a;
-  --sidebar-hover: #1e293b;
-  --sidebar-active: #334155;
-  --sidebar-text: #94a3b8;
-  --sidebar-text-active: #f8fafc;
+  --sidebar-bg: #172033;
+  --sidebar-hover: #222d44;
+  --sidebar-active: #2b3955;
+  --sidebar-text: #aab5c8;
+  --sidebar-text-active: #f6f8fc;
 }
 
 /* 全局重置 */
@@ -488,7 +489,7 @@ body, html {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--bg-color);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
@@ -528,7 +529,7 @@ body, html {
   color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+  box-shadow: 2px 0 14px rgba(23, 32, 51, 0.12);
   z-index: 10;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -622,7 +623,7 @@ body, html {
 .nav-item.active {
   color: #fff;
   background-color: var(--primary);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 5px 14px rgba(47, 107, 255, 0.25);
 }
 .nav-item.active .nav-icon {
   opacity: 1;
@@ -913,6 +914,19 @@ body, html {
   position: relative;
 }
 
+button, input, select, textarea {
+  font: inherit;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(47, 107, 255, 0.25);
+  outline-offset: 2px;
+}
+
+.data-table, .stat-value, .order-amount, .code-cell, .time-cell {
+  font-variant-numeric: tabular-nums;
+}
+
 /* 全局按钮基础样式（为了统一组件内的按钮） */
 .btn {
   display: inline-flex;
@@ -924,7 +938,7 @@ body, html {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
   outline: none;
 }
 .btn:focus-visible {
@@ -962,7 +976,7 @@ body, html {
     right: 0;
     height: 56px;
     padding: 0 14px;
-    background: rgba(248, 250, 252, 0.92);
+    background: rgba(246, 247, 249, 0.96);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(226, 232, 240, 0.7);
     z-index: 50;
@@ -973,7 +987,7 @@ body, html {
     background: rgba(255, 255, 255, 0.7);
     width: 44px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1063,7 +1077,7 @@ body, html {
     bottom: 0;
     height: calc(64px + env(safe-area-inset-bottom));
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(248, 250, 252, 0.92);
+    background: rgba(246, 247, 249, 0.96);
     backdrop-filter: blur(10px);
     border-top: 1px solid rgba(226, 232, 240, 0.7);
     z-index: 50;
@@ -1085,7 +1099,7 @@ body, html {
 
   .tab-item.active {
     color: var(--primary);
-    background: rgba(224, 231, 255, 0.7);
+    background: rgba(232, 239, 255, 0.9);
   }
 
   .tab-icon {
@@ -1095,6 +1109,14 @@ body, html {
   .tab-text {
     font-size: 11px;
     letter-spacing: 0.2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }
 </style>

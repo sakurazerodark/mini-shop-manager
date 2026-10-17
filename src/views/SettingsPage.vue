@@ -954,7 +954,9 @@ onUnmounted(() => {
 
 <style scoped>
 .settings-container {
-  padding: 20px;
+  padding: 28px 32px 40px;
+  max-width: 1480px;
+  margin: 0 auto;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -978,7 +980,7 @@ onUnmounted(() => {
 .subtitle {
   margin-top: 6px;
   font-size: 14px;
-  color: var(--text-light);
+  color: var(--text-muted);
 }
 
 .payment-preference-list {
@@ -1053,7 +1055,7 @@ onUnmounted(() => {
   background: none;
   font-size: 15px;
   font-weight: 500;
-  color: var(--text-light);
+  color: var(--text-muted);
   cursor: pointer;
   border-bottom: 3px solid transparent;
   transition: all 0.2s;
@@ -1081,7 +1083,7 @@ onUnmounted(() => {
   background: none;
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-light);
+  color: var(--text-muted);
   cursor: pointer;
   border-bottom: 3px solid transparent;
   transition: all 0.2s;
@@ -1106,7 +1108,7 @@ onUnmounted(() => {
 .card {
   background: var(--surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   box-shadow: var(--shadow-sm);
   padding: 18px;
 }
@@ -1351,8 +1353,7 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
   .settings-container {
-    padding-top: 76px;
-    padding-bottom: 92px;
+    padding: 20px 14px 92px;
   }
   .grid {
     grid-template-columns: 1fr;

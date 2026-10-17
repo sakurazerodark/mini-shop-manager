@@ -1091,27 +1091,30 @@ onMounted(() => {
 
 <style scoped>
 .inventory-container {
-  padding: 20px;
+  padding: 28px 32px 40px;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
+  max-width: 1480px;
+  margin: 0 auto;
 }
 
 .header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 17px 20px;
   background: var(--surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
 }
 
 .page-title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 25px;
+  font-weight: 700;
   color: var(--text-main);
 }
 
@@ -1168,6 +1171,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   padding: 32px;
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   height: fit-content;
@@ -1319,6 +1323,7 @@ onMounted(() => {
   background: var(--surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1682,7 +1687,7 @@ onMounted(() => {
 
 @media (max-width: 900px) {
   .inventory-container {
-    padding: 14px;
+    padding: 20px 14px 28px;
     height: auto;
     min-height: calc(100vh - 120px);
   }
@@ -1697,7 +1702,7 @@ onMounted(() => {
 
   .header-actions .btn {
     padding: 10px 14px;
-    border-radius: 14px;
+    border-radius: 6px;
   }
 
   .add-product-card {

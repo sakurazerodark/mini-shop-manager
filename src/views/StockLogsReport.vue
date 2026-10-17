@@ -120,7 +120,7 @@ const getTypeColor = (type) => {
 </template>
 
 <style scoped>
-.page-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.page-container { padding: 28px 32px 40px; max-width: 1480px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-title { font-size: 24px; font-weight: 600; color: var(--text-main); margin: 0; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
@@ -128,7 +128,7 @@ const getTypeColor = (type) => {
 .filter-input { border: none; padding: 6px 12px; border-radius: 4px; outline: none; color: var(--text-main); font-family: inherit; font-size: 14px; background: transparent; }
 .filter-input:focus { background: var(--bg-color); }
 .filter-separator { color: var(--text-muted); font-size: 13px; margin: 0 4px; }
-.card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); padding: 24px; }
+.card { background: #fff; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-sm); padding: 24px; }
 .table-container { overflow-x: auto; min-height: 300px; position: relative; }
 .table-container.loading { opacity: 0.6; pointer-events: none; }
 .data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
@@ -136,7 +136,7 @@ const getTypeColor = (type) => {
 .data-table td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; color: var(--text-main); }
 .data-table tr:hover td { background-color: var(--bg-color); }
 .time-cell { font-family: monospace; color: var(--text-muted); white-space: nowrap; }
-.type-tag { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #fff; }
+.type-tag { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; color: #fff; }
 .bg-primary { background-color: var(--primary); }
 .bg-success { background-color: var(--success); }
 .bg-warning { background-color: var(--warning); }
@@ -150,4 +150,5 @@ const getTypeColor = (type) => {
 .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
 .pagination { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .page-info { font-weight: 500; color: var(--text-main); }
+@media (max-width: 900px) { .page-container { padding: 20px 14px 28px; } .page-header { flex-direction: column; align-items: stretch; gap: 14px; } .header-actions { flex-wrap: wrap; } .filter-group { flex: 1 1 100%; } }
 </style>
