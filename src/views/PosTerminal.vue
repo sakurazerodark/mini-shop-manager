@@ -9,6 +9,7 @@ import { queryAlipay, precreateAlipay, payAlipay } from '../api/payments'
 const barcodeInput = ref('')
 const barcodeInputRef = ref(null)
 const cart = ref([])
+const selectedCartIndex = ref(-1)
 const paymentMethod = ref('alipay_dynamic_qr')
 const paymentConfig = ref(null)
 const defaultCashierShortcuts = { checkout: 'Enter', hold: 'F1', retrieve: 'F2', clear: 'Escape' }
@@ -112,8 +113,10 @@ const handleScan = async () => {
       } else {
         if (existingItem) {
           existingItem.quantity += 1
+          selectedCartIndex.value = cart.value.indexOf(existingItem)
         } else {
           cart.value.unshift({ ...product, quantity: 1 })
+          selectedCartIndex.value = 0
         }
       }
       
@@ -146,8 +149,10 @@ const confirmWeight = () => {
   const existingItem = cart.value.find(item => item.id === product.id)
   if (existingItem) {
     existingItem.quantity += weight
+    selectedCartIndex.value = cart.value.indexOf(existingItem)
   } else {
     cart.value.unshift({ ...product, quantity: weight })
+    selectedCartIndex.value = 0
   }
 
   showWeightModal.value = false
@@ -166,10 +171,12 @@ const cancelWeight = () => {
 }
 
 const increaseQty = (item) => {
+  if (item?.is_weighing) return
   item.quantity++
 }
 
 const decreaseQty = (item) => {
+  if (item?.is_weighing) return
   if (item.quantity > 1) {
     item.quantity--
   } else {
@@ -181,8 +188,30 @@ const removeFromCart = (item) => {
   const index = cart.value.findIndex(i => i.id === item.id)
   if (index !== -1) {
     cart.value.splice(index, 1)
+    if (cart.value.length === 0) {
+      selectedCartIndex.value = -1
+    } else if (selectedCartIndex.value > index) {
+      selectedCartIndex.value -= 1
+    } else {
+      selectedCartIndex.value = Math.min(selectedCartIndex.value, cart.value.length - 1)
+    }
   }
   barcodeInputRef.value.focus()
+}
+
+const selectCartItem = (index) => {
+  if (!cart.value.length) {
+    selectedCartIndex.value = -1
+    return
+  }
+  selectedCartIndex.value = Math.max(0, Math.min(index, cart.value.length - 1))
+}
+
+const adjustSelectedQuantity = (delta) => {
+  const item = cart.value[selectedCartIndex.value]
+  if (!item || item.is_weighing) return
+  if (delta > 0) increaseQty(item)
+  else decreaseQty(item)
 }
 
 const fetchPaymentConfig = async () => {
@@ -448,6 +477,7 @@ const finalizeOrder = async () => {
     showSuccessOverlay.value = true
     showPayOverlay.value = false
     cart.value = []
+    selectedCartIndex.value = -1
 
     if (successTimer) clearTimeout(successTimer)
     successTimer = setTimeout(() => {
@@ -549,6 +579,33 @@ const handleGlobalKeydown = (e) => {
   const activeElement = document.activeElement
   const isTextEntry = ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement?.tagName) || activeElement?.isContentEditable
   const isBarcodeEntry = activeElement === barcodeInputRef.value
+  const canEditCart = !e.ctrlKey && !e.metaKey && !e.altKey && scanMode.value === 'product' && !showSuccessOverlay.value && !showWeightModal.value && !showPayOverlay.value && (!isTextEntry || isBarcodeEntry) && (!isBarcodeEntry || !barcodeInput.value.trim())
+
+  if (canEditCart) {
+    if (e.key === 'F3') {
+      e.preventDefault()
+      barcodeInputRef.value?.focus()
+      return
+    }
+    if (cart.value.length && ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault()
+      if (e.key === 'Home') selectCartItem(0)
+      else if (e.key === 'End') selectCartItem(cart.value.length - 1)
+      else selectCartItem(selectedCartIndex.value + (e.key === 'ArrowUp' ? -1 : 1))
+      return
+    }
+    if (cart.value.length && ['+', '=', '-'].includes(e.key)) {
+      e.preventDefault()
+      adjustSelectedQuantity(e.key === '-' ? -1 : 1)
+      return
+    }
+    if (cart.value.length && e.key === 'Delete') {
+      e.preventDefault()
+      const selectedItem = cart.value[selectedCartIndex.value]
+      if (selectedItem) removeFromCart(selectedItem)
+      return
+    }
+  }
   const canUseShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !showSuccessOverlay.value && !showWeightModal.value && !showPayOverlay.value && (!isTextEntry || isBarcodeEntry)
 
   if (canUseShortcut) {
@@ -567,6 +624,7 @@ const handleGlobalKeydown = (e) => {
       }
       suspendedOrder.value = JSON.parse(JSON.stringify(cart.value))
       cart.value = []
+      selectedCartIndex.value = -1
       window.$toast('已挂单', 'success')
       return
     }
@@ -581,6 +639,7 @@ const handleGlobalKeydown = (e) => {
         return
       }
       cart.value = JSON.parse(JSON.stringify(suspendedOrder.value))
+      selectedCartIndex.value = 0
       suspendedOrder.value = null
       window.$toast('已取单', 'success')
       return
@@ -589,6 +648,7 @@ const handleGlobalKeydown = (e) => {
       e.preventDefault()
       if (cart.value.length > 0) {
         cart.value = []
+        selectedCartIndex.value = -1
         window.$toast('购物车已清空', 'info')
       }
       return
@@ -705,10 +765,14 @@ onUnmounted(() => {
 
       <div class="cart-card">
         <div class="cart-list-wrapper">
-          <div class="shortcut-tips" style="display: flex; justify-content: flex-end; padding: 8px 16px; background: var(--surface-alt); border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-muted); gap: 16px;">
-            <span><kbd>F1</kbd> 挂单</span>
-            <span :style="{ color: suspendedOrder ? 'var(--primary)' : 'var(--text-muted)', fontWeight: suspendedOrder ? 'bold' : 'normal' }"><kbd>F2</kbd> 取单</span>
-            <span><kbd>ESC</kbd> 清空</span>
+          <div class="shortcut-tips" style="display: flex; justify-content: flex-end; flex-wrap: wrap; padding: 8px 16px; background: var(--surface-alt); border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-muted); gap: 8px 16px;">
+            <span><kbd>F3</kbd> 商品录入</span>
+            <span><kbd>↑↓</kbd> 选择商品</span>
+            <span><kbd>+/-</kbd> 修改数量</span>
+            <span><kbd>Delete</kbd> 删除商品</span>
+            <span><kbd>{{ shortcutLabel(shortcutForAction('hold')) }}</kbd> 挂单</span>
+            <span :style="{ color: suspendedOrder ? 'var(--primary)' : 'var(--text-muted)', fontWeight: suspendedOrder ? 'bold' : 'normal' }"><kbd>{{ shortcutLabel(shortcutForAction('retrieve')) }}</kbd> 取单</span>
+            <span><kbd>{{ shortcutLabel(shortcutForAction('clear')) }}</kbd> 清空</span>
           </div>
           <table class="cart-table">
             <thead>
@@ -721,7 +785,7 @@ onUnmounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in cart" :key="item.id" class="cart-row">
+              <tr v-for="(item, index) in cart" :key="item.id" :class="['cart-row', { 'is-selected': selectedCartIndex === index }]" @click="selectCartItem(index)" :aria-selected="selectedCartIndex === index">
                 <td>
                   <div style="display: flex; align-items: center; gap: 12px;">
                     <div class="cart-item-image" style="width: 40px; height: 40px; flex-shrink: 0;">
@@ -1172,6 +1236,15 @@ onUnmounted(() => {
 
 .cart-row:hover td {
   background-color: #f8fafc;
+}
+
+.cart-row.is-selected td {
+  background: var(--primary-light);
+  border-bottom-color: rgba(47, 107, 255, 0.22);
+}
+
+.cart-row.is-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .product-info {
